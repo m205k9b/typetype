@@ -26,8 +26,7 @@ typetype/
 │   ├── guides/                  ← [操作手册] 任务驱动的步骤指导
 │   ├── examples/                ← [代码示例] 独立可运行的示例
 │   ├── decisions/               ← [决策] 架构决策记录（新建，按编号索引）
-│   ├── history/                 ← [归档] 历史文档（冻结，不新增）
-│   ├── superpowers/             ← [规划档案] 既有 specs/plans，作为历史规划材料
+│   ├── history/                 ← [归档] 历史设计文档（冻结，不新增）
 │   └── meta/                    ← [元规则] 本文档体系规范
 └── CHANGELOG.md                 ← [发布历史] 版本变更记录
 ```
@@ -41,7 +40,7 @@ typetype/
 用于代码、架构、配置、API、QML 页面等技术事实冲突：
 
 ```text
-源码 > docs/ARCHITECTURE.md > docs/reference/* > docs/decisions/* > AGENTS.md > docs/guides/* > docs/history/* > docs/superpowers/*
+源码 > docs/ARCHITECTURE.md > docs/reference/* > docs/decisions/* > AGENTS.md > docs/guides/* > docs/history/*
 ```
 
 ### 维度 B：操作优先级链
@@ -49,7 +48,7 @@ typetype/
 用于编码规范、禁忌、工作流步骤、验证要求等行为指令冲突：
 
 ```text
-AGENTS.md > docs/guides/* > docs/ARCHITECTURE.md > docs/decisions/* > docs/reference/* > docs/history/* > docs/superpowers/*
+AGENTS.md > docs/guides/* > docs/ARCHITECTURE.md > docs/decisions/* > docs/reference/* > docs/history/*
 ```
 
 ### 维度 C：跨维度冲突处理
@@ -68,10 +67,10 @@ AGENTS.md > docs/guides/* > docs/ARCHITECTURE.md > docs/decisions/* > docs/refer
 | 事实文档 | `ARCHITECTURE.md` | 所有人 | 架构事实、数据流、依赖规则、设计陷阱。不限行数。 |
 | 速查表 | `docs/reference/*` | 开发者/AI | 纯表格，不写教程。每个文件 ≤ 200 行。 |
 | 操作手册 | `docs/guides/*` | 开发者/AI | 任务驱动的步骤、命令、验证方式。引用 docs 内容但不复制。 |
+| 教程 | `docs/tutorials/*` | 新人 | 端到端跟做的学习路径。完整规范指向 reference。 |
 | 代码示例 | `docs/examples/*` | 开发者/AI | 独立可运行示例，展示最佳实践。完整规范指向 reference。 |
 | 架构决策记录 | `docs/decisions/*` | 开发者/AI | 架构决策记录。编号索引，标准模板（背景/选项/决策/影响）。 |
 | 历史归档 | `docs/history/*` | 参考 | 已完成的设计文档、bug 记录。**冻结，不新增、不修改**。 |
-| 规划档案 | `docs/superpowers/*` | 参考 | 既有 specs/plans 材料；不作为当前事实或操作规则的权威来源。 |
 | 发布历史 | `CHANGELOG.md` | 用户/维护者 | 版本变更、用户可见改动、破坏性变更。 |
 
 ## 分级复制规则

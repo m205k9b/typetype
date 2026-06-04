@@ -1,4 +1,4 @@
-# 统一低内存载文管线计划书
+# ADR-001: 统一低内存载文管线
 <!-- 状态: proposed | 最后验证: 2026-05-30 -->
 
 ## 背景
@@ -422,3 +422,42 @@ Bridge
 - 进度恢复依赖全文；
 - 全文乱序高内存；
 - QML 导航时序靠 `Qt.callLater()`。
+
+## 选项
+
+### A. 在现有管线基础上修补
+
+保留 `setupSliceMode(text)` 的调用链，在 LoadTextUseCase 中增加低内存优化。
+
+**优点**：改动最小。
+**缺点**：两套管线并存（旧的全量 + 新的分片），维护成本高；进度恢复仍依赖全文 hash。
+
+### B. TextHandle + SegmentProvider + TextSessionUseCase（选择）
+
+如正文所述，统一载文管线，按来源创建 InMemory 或 File provider。
+
+**优点**：所有来源共享同一套逻辑；低内存；进度用 handle 标识；无 Qt.callLater 依赖。
+**缺点**：需要重写多个入口页的调用路径；分阶段迁移。
+
+### C. 服务端统一提供 segment API
+
+只改服务端，客户端走 HTTP range 请求。
+
+**优点**：客户端零修改。
+**缺点**：服务端改造成本高；无法解决本地文本的低内存问题。
+
+## 决策
+
+**选择 B**。引入 TextHandle + SegmentProvider + TextSessionUseCase 的统一载文管线。
+
+详细设计见全文。分 5 阶段实施：锁现有行为 → 引入模型和 provider → 统一文件型来源 → 虚拟全文乱序 → 删除旧路径。
+
+## 影响
+
+- **正向**：所有载文入口统一为 `startTextSession(request)`，消除 4 套不同实现
+- **正向**：百万字文本分片加载内存不随全文线性增长
+- **变更**：`TextLoadPanel` 不再预加载全文，改为显示 metadata/预览
+- **变更**：四个入口页调用路径改为 Bridge → TextAdapter → TextSessionUseCase
+- **变更**：进度恢复 key 改为基于 TextHandle 的 hash，不再依赖全文内容
+- **变更**：`setupSliceMode()` 对外 QML 调用废弃
+- **服务端**：需要 metadata 和 segments API 支持完美低内存远程载文
