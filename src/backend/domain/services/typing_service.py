@@ -16,10 +16,8 @@ from datetime import datetime
 from time import time
 
 from ...models.entity.session_stat import SessionStat
+from ...utils.logger import log_debug
 from .char_stats_service import CharStatsService
-
-
-_CJK_WORD_GAP_MS = 300
 
 
 @dataclass
@@ -48,6 +46,7 @@ class TypingState:
     peak_key_stroke: float = 0.0
     peak_code_length: float = float("inf")
     char_commit_times: dict[int, float] = field(default_factory=dict)
+    phrase_positions: set[int] = field(default_factory=set)
 
 
 class TypingService:
@@ -176,8 +175,12 @@ class TypingService:
         self._state.score_data.backspace_count = 0
         self._state.score_data.correction_count = 0
         self._state.score_data.date = ""
+        self._state.score_data.slow_chars = []
         self._state.last_commit_time_ms = 0.0
         self._state.char_commit_times.clear()
+        self._state.phrase_positions.clear()
+        if self._char_stats_service:
+            self._char_stats_service.clear()
 
     def reset(self) -> None:
         """重置所有状态。"""
@@ -278,6 +281,18 @@ class TypingService:
 
                 # 记录每个字符的提交时间（毫秒时间戳）
                 self._state.char_commit_times[pos] = now_ms
+                # 标记词组位置：grow_length > 1 表示一次提交了多个字符（打词）
+                # 只标记新增字符（pos >= char_count），避免光标不在末尾时误标已有字符
+                is_phrase = grow_length > 1 and pos >= self._state.score_data.char_count
+                if is_phrase:
+                    self._state.phrase_positions.add(pos)
+                log_debug(
+                    f"[TypingService] handle_committed_text: "
+                    f"s='{s}' grow_length={grow_length} begin_pos={begin_pos} "
+                    f"pos={pos} char='{char}' char_count_before={self._state.score_data.char_count} "
+                    f"elapsed_ms={elapsed_ms:.0f} per_char_ms={per_char_ms:.0f} "
+                    f"is_phrase={is_phrase} phrase_positions={sorted(self._state.phrase_positions)}"
+                )
                 # 累积字符统计
                 if self._char_stats_service:
                     self._char_stats_service.accumulate(char, per_char_ms, is_error)
@@ -324,9 +339,12 @@ class TypingService:
                 char_count = self._state.score_data.char_count
                 for i in range(char_count + grow_length, char_count):
                     char_updates.append((i, "", False))
+                    self._state.phrase_positions.discard(i)
+                self._state.last_commit_time_ms = now_ms
 
             self._state.score_data.char_count += grow_length
-            self._state.last_commit_time_ms = now_ms
+            # NOTE: grow_length=0（纯替换）时不更新 last_commit_time_ms，
+            # 避免输入法 preedit 变化等无意义事件重置时间基准
 
         return char_updates, is_completed
 
@@ -335,15 +353,42 @@ class TypingService:
         if self._char_stats_service:
             self._char_stats_service.flush_async()
 
+    def capture_slow_chars(self) -> None:
+        """捕获慢字条目到 score_data 中。
+
+        必须在 flush_char_stats() 之前调用，否则 _dirty 被清空后无法获取。
+        """
+        if self._char_stats_service:
+            log_debug(
+                f"[TypingService] capture_slow_chars: "
+                f"plain_doc='{self._state.plain_doc}' "
+                f"phrase_positions={sorted(self._state.phrase_positions)}"
+            )
+            self._state.score_data.slow_chars = (
+                self._char_stats_service.get_slow_entries(
+                    self._state.plain_doc,
+                    phrase_positions=self._state.phrase_positions,
+                )
+            )
+            log_debug(
+                f"[TypingService] capture_slow_chars result: {self._state.score_data.slow_chars}"
+            )
+
     def get_history_record(self) -> dict[str, float | int | str | list]:
-        """获取历史记录。"""
+        """获取历史记录。
+
+        NOTE: slow_chars 可能已由外部在 flush_char_stats() 之前捕获到
+        score_data.slow_chars 中（见 TypingAdapter._check_typing_complete）。
+        优先使用预捕获值，避免 flush 后 _dirty 为空导致数据丢失。
+        """
         self._state.score_data.date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        slow_chars = []
         word_typing_rate = self._compute_word_typing_rate()
         self._state.score_data.word_typing_rate = word_typing_rate
-        if self._char_stats_service:
+        slow_chars = self._state.score_data.slow_chars or []
+        if not slow_chars and self._char_stats_service:
             slow_chars = self._char_stats_service.get_slow_entries(
-                self._state.plain_doc
+                self._state.plain_doc,
+                phrase_positions=self._state.phrase_positions,
             )
         return {
             "speed": round(self._state.score_data.speed, 2),
@@ -366,68 +411,33 @@ class TypingService:
         }
 
     def _compute_word_typing_rate(self) -> float:
-        """计算打词率（word typing rate）。
+        """计算打词率：词组字符数 / 总已输入字符数 × 100。
 
-        打词率指在一段打字内容中，连续 2 个及以上的 CJK 字符被当作「词组」输入的比例。
-        规则：
-        - 只考虑 CJK 统一表意文字（U+4E00-9FFF, U+3400-4DBF）
-        - 连续 CJK 字符的间隔 ≤ _CJK_WORD_GAP_MS ms 时视为同词组输入
-        - 只统计在 char_commit_times 中有记录的位置（即本会话中实际打过的字符）
-        - 打词率 = 词组字符数 / 总 CJK 字符数 × 100
-
-        Returns:
-            打词率百分比（0~100）
+        词组判定基于文本长度变化（grow_length > 1），而非时间间隔。
+        分母为当前已输入的全部字符（含标点、英文、数字），
+        符合「打词数占总字数比率」的直觉定义。
         """
-        timings = self._state.char_commit_times
-        text = self._state.plain_doc
+        phrase = self._state.phrase_positions
+        total_input = self._state.score_data.char_count
 
-        if not timings or not text:
+        log_debug(
+            f"[TypingService] _compute_word_typing_rate: "
+            f"total_input={total_input} phrase_positions={sorted(phrase)}"
+        )
+
+        if total_input <= 0 or not phrase:
+            log_debug(
+                "[TypingService] _compute_word_typing_rate: no input or no phrases → 0.0"
+            )
             return 0.0
 
-        total_cjk = 0
-        word_chars = 0
+        word_chars = sum(1 for pos in phrase if pos < total_input)
 
-        i = 0
-        while i < len(text):
-            cp = ord(text[i])
-            is_cjk = 0x4E00 <= cp <= 0x9FFF or 0x3400 <= cp <= 0x4DBF
-            if is_cjk:
-                run_start = i
-                while i < len(text):
-                    cp2 = ord(text[i])
-                    is_cjk2 = 0x4E00 <= cp2 <= 0x9FFF or 0x3400 <= cp2 <= 0x4DBF
-                    if not is_cjk2:
-                        break
-                    i += 1
+        log_debug(
+            f"[TypingService] _compute_word_typing_rate: "
+            f"total_input={total_input} word_chars={word_chars}"
+        )
 
-                # 统计该 CJK 段中有时间记录的字符
-                for pos in range(run_start, i):
-                    if pos in timings:
-                        total_cjk += 1
-
-                # 扫描该段内的词组（连续 CJK 字符，间隔 ≤ _CJK_WORD_GAP_MS）
-                pos = run_start
-                while pos < i:
-                    if pos not in timings:
-                        pos += 1
-                        continue
-
-                    group_end = pos + 1
-                    while group_end < i and group_end in timings:
-                        if (
-                            timings[group_end] - timings[group_end - 1]
-                            > _CJK_WORD_GAP_MS
-                        ):
-                            break
-                        group_end += 1
-
-                    if group_end - pos >= 2:
-                        word_chars += group_end - pos
-
-                    pos = group_end
-            else:
-                i += 1
-
-        if total_cjk == 0:
-            return 0.0
-        return round(word_chars / total_cjk * 100, 2)
+        rate = round(word_chars / total_input * 100, 2)
+        log_debug(f"[TypingService] _compute_word_typing_rate: result={rate}%")
+        return rate
