@@ -16,6 +16,7 @@ QQC.Pane {
     property bool isSpecialPlatform: appBridge ? appBridge.isSpecialPlatform : false
     // 程序化设置文本时为 true，抑制 onTextChanged 中的统计逻辑
     property bool suppressTextChanged: false
+    property string lastPreeditText: ""
 
     // 信号：通知 Bridge 焦点变化
     signal lowerPaneFocusChanged(bool hasFocus)
@@ -55,7 +56,27 @@ QQC.Pane {
             onReadOnlyChanged: {
                 if (!readOnly) {
                     root.lastText = text;
+                    root.lastPreeditText = "";
                 }
+            }
+
+            function estimatedKeyCount(preedit, growLength) {
+                if (root.isSpecialPlatform)
+                    return 0;
+                if (preedit.length > 0) {
+                    if (root.lastPreeditText.length === 0)
+                        return preedit.length;
+                    if (preedit.indexOf(root.lastPreeditText) === 0)
+                        return preedit.length - root.lastPreeditText.length;
+                    if (preedit !== root.lastPreeditText)
+                        return 1;
+                    return 0;
+                }
+                if (growLength > 0)
+                    return 1;
+                if (growLength < 0)
+                    return 1;
+                return 0;
             }
 
             Keys.onPressed: function(event) {
@@ -139,6 +160,7 @@ QQC.Pane {
                 var currentText = text;
                 if (root.suppressTextChanged) {
                     root.lastText = currentText;
+                    root.lastPreeditText = preeditText;
                     return;
                 }
 
@@ -168,8 +190,11 @@ QQC.Pane {
 
                     //console.log("平台特殊性已暴露到qml中：" + root.isSpecialPlatform);
                     if (!root.isSpecialPlatform) {
-                        /* 如果不是wayland平台, 则在qml中统计按键事件 */
-                        appBridge.handlePressed();
+                        var keyCount = estimatedKeyCount(preeditText, growLength);
+                        if (keyCount > 0) {
+                            for (var i = 0; i < keyCount; i++)
+                                appBridge.handlePressed();
+                        }
                     }
                     //==============================================
 
@@ -186,6 +211,7 @@ QQC.Pane {
                 }
 
                 root.lastText = currentText;
+                root.lastPreeditText = preeditText;
             }
         }
     }
