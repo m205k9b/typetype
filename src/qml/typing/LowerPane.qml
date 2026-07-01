@@ -17,6 +17,8 @@ QQC.Pane {
     // 程序化设置文本时为 true，抑制 onTextChanged 中的统计逻辑
     property bool suppressTextChanged: false
     property string lastPreeditText: ""
+    // 预编辑退格可能同时触发 Keys.onPressed 与 onTextChanged，用于避免重复统计退格。
+    property bool preeditBackspaceCountedOnPressed: false
 
     // 信号：通知 Bridge 焦点变化
     signal lowerPaneFocusChanged(bool hasFocus)
@@ -60,9 +62,24 @@ QQC.Pane {
                 }
             }
 
+            // Linux/Wayland 回退路径下 QML 可能收不到 Keys.onPressed。
+            // 预编辑串缩短表示用户在输入法候选/拼音中按了 Backspace：只计退格，不计回改。
+            // 已提交正文删除由 growLength < 0 处理：只计回改，不计退格。
+            function isPreeditBackspace(preedit, growLength) {
+                if (root.isSpecialPlatform || growLength !== 0)
+                    return false;
+                if (root.lastPreeditText.length === 0)
+                    return false;
+                if (preedit.length >= root.lastPreeditText.length)
+                    return false;
+                return root.lastPreeditText.indexOf(preedit) === 0;
+            }
+
             function estimatedKeyCount(preedit, growLength) {
                 if (root.isSpecialPlatform)
                     return 0;
+                if (isPreeditBackspace(preedit, growLength))
+                    return 1;
                 if (preedit.length > 0) {
                     if (root.lastPreeditText.length === 0)
                         return preedit.length;
@@ -86,8 +103,9 @@ QQC.Pane {
                         appBridge.toggleTypingPause();
                     return;
                 }
-                if (event.key === Qt.Key_Backspace && appBridge && !appBridge.isSpecialPlatform) {
+                if (event.key === Qt.Key_Backspace && appBridge && !appBridge.isSpecialPlatform && preeditText.length > 0) {
                     appBridge.accumulateBackspace();
+                    root.preeditBackspaceCountedOnPressed = true;
                 }
                 var shortcutPressed = (event.modifiers & Qt.ControlModifier) || (event.modifiers & Qt.MetaModifier);
                 if (shortcutPressed) {
@@ -193,9 +211,13 @@ QQC.Pane {
                         //仅在Linux平台生效
                         if (Qt.platform.os === "linux") {
                             var keyCount = estimatedKeyCount(preeditText, growLength);
+                            var preeditBackspace = isPreeditBackspace(preeditText, growLength);
                             if (keyCount > 0) {
                                 for (var i = 0; i < keyCount; i++)
                                     appBridge.handlePressed();
+                            }
+                            if (preeditBackspace && !root.preeditBackspaceCountedOnPressed) {
+                                appBridge.accumulateBackspace();
                             }
                         } else {
                             appBridge.handlePressed();
@@ -217,6 +239,7 @@ QQC.Pane {
 
                 root.lastText = currentText;
                 root.lastPreeditText = preeditText;
+                root.preeditBackspaceCountedOnPressed = false;
             }
         }
     }

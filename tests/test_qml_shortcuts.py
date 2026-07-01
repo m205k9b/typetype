@@ -30,6 +30,34 @@ def test_enter_shortcut_toggles_typing_pause():
     assert "toggleTypingPause()" in lower_pane_source
 
 
+def test_linux_preedit_backspace_counts_as_backspace():
+    lower_pane = PROJECT_ROOT / "src/qml/typing/LowerPane.qml"
+
+    source = lower_pane.read_text(encoding="utf-8")
+
+    assert "function isPreeditBackspace(preedit, growLength)" in source
+    assert "root.lastPreeditText.indexOf(preedit) === 0" in source
+    assert "var preeditBackspace = isPreeditBackspace(preeditText, growLength)" in source
+    assert (
+        "if (preeditBackspace && !root.preeditBackspaceCountedOnPressed)"
+        in source
+    )
+
+
+def test_committed_text_backspace_does_not_count_as_backspace():
+    lower_pane = PROJECT_ROOT / "src/qml/typing/LowerPane.qml"
+
+    source = lower_pane.read_text(encoding="utf-8")
+
+    assert (
+        "event.key === Qt.Key_Backspace && appBridge "
+        "&& !appBridge.isSpecialPlatform && preeditText.length > 0"
+    ) in source
+    assert "root.preeditBackspaceCountedOnPressed = true" in source
+    assert "if (growLength < 0)" in source
+    assert "appBridge.accumulateCorrection();" in source
+
+
 def test_main_window_auto_pauses_when_deactivated():
     main_qml = PROJECT_ROOT / "src/qml/Main.qml"
 
