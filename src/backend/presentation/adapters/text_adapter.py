@@ -52,6 +52,7 @@ class TextAdapter(QObject):
         self._load_text_usecase = load_text_usecase
         self._local_text_loader = local_text_loader
         self._text_loading = False
+        self._segment_no = ""
         self._thread_pool = QThreadPool.globalInstance()
         self._load_generation = 0
         self._lookup_generation = 0
@@ -73,6 +74,7 @@ class TextAdapter(QObject):
         """失效当前普通载文 worker 和 text_id 回查。"""
         self._load_generation += 1
         self.invalidate_pending_text_id_lookup()
+        self._segment_no = ""
         self._set_text_loading(False)
 
     def invalidate_pending_text_id_lookup(self) -> None:
@@ -102,6 +104,7 @@ class TextAdapter(QObject):
         text_id = result.text_id if hasattr(result, "text_id") else None
         source_label = result.source_label if hasattr(result, "source_label") else ""
         source_key = result.source_key if hasattr(result, "source_key") else ""
+        self._segment_no = getattr(result, "segment_no", "") or ""
         if not isinstance(text, str):
             self.textLoadFailed.emit("加载文本失败：返回数据格式错误")
             return
@@ -266,6 +269,10 @@ class TextAdapter(QObject):
     @property
     def text_loading(self) -> bool:
         return self._text_loading
+
+    @property
+    def segment_no(self) -> str:
+        return self._segment_no
 
     def get_source_options(self) -> list[dict[str, str | bool]]:
         """获取 UI 可选的来源列表（全部来源，用于载文下拉框）。"""

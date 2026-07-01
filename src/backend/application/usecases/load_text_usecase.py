@@ -21,6 +21,7 @@ class LoadTextResult:
     source_label: str = ""
     source_key: str = ""
     error_message: str = ""
+    segment_no: str = ""
 
 
 class LoadTextUseCase:
@@ -36,6 +37,7 @@ class LoadTextUseCase:
     """
 
     _SEGMENT_MARK_PATTERN = re.compile(r"-----第\S*段")
+    _SEGMENT_NO_PATTERN = re.compile(r"-----第(\d+)段")
     _INVISIBLE_CHAR_PATTERN = re.compile(r"[\u200b-\u200f\ufeff\u2060\u00ad]")
 
     def __init__(
@@ -88,7 +90,7 @@ class LoadTextUseCase:
 
     def load_from_clipboard(self) -> LoadTextResult:
         """从剪贴板加载文本。"""
-        text = self._extract_clipboard_text(self._clipboard_reader.text())
+        text, segment_no = self._extract_clipboard_text(self._clipboard_reader.text())
         if not text:
             return LoadTextResult(
                 success=False, text="", error_message="当前剪贴板无文本内容"
@@ -100,6 +102,7 @@ class LoadTextUseCase:
             text_id=None,
             source_label="剪贴板",
             source_key="",
+            segment_no=segment_no,
         )
 
     def lookup_text_id(self, source_key: str, content: str) -> int | None:
@@ -110,20 +113,22 @@ class LoadTextUseCase:
         return self._text_gateway.lookup_text_id(source_key, content)
 
     @classmethod
-    def _extract_clipboard_text(cls, raw_text: str) -> str:
+    def _extract_clipboard_text(cls, raw_text: str) -> tuple[str, str]:
         if raw_text == "":
-            return ""
+            return "", ""
 
         lines = re.split(r"[\n\r]", raw_text)
         lines = [line for line in lines if line]
         marker_index = cls._find_segment_marker_index(lines)
 
+        segment_no = ""
         if marker_index >= 0:
             text = cls._extract_sender_body(lines, marker_index)
+            segment_no = cls._extract_segment_no(lines, marker_index)
         else:
             text = raw_text.replace("\n", "").replace("\r", "").replace("\t", "")
 
-        return cls._INVISIBLE_CHAR_PATTERN.sub("", text)
+        return cls._INVISIBLE_CHAR_PATTERN.sub("", text), segment_no
 
     @classmethod
     def _find_segment_marker_index(cls, lines: list[str]) -> int:
@@ -142,6 +147,13 @@ class LoadTextUseCase:
         if head.startswith("皇叔 "):
             return cls._unicode_bias(text)
         return text
+
+    @classmethod
+    def _extract_segment_no(cls, lines: list[str], marker_index: int) -> str:
+        if marker_index >= len(lines):
+            return ""
+        match = cls._SEGMENT_NO_PATTERN.search(lines[marker_index])
+        return match.group(1) if match else ""
 
     @staticmethod
     def _unicode_bias(text: str) -> str:

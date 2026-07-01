@@ -282,6 +282,11 @@ class Bridge(QObject):
             self._pending_history_segment_label = f"{idx}/{total}"
         else:
             self._pending_history_segment_label = self.wenlaiSegmentLabel
+        # 晴发文段号为空时，回退到剪贴板段号
+        if not self._pending_history_segment_label:
+            seg_no = self._text_adapter.segment_no
+            if seg_no:
+                self._pending_history_segment_label = seg_no
         self._pending_history_score_text = self._build_current_score_plain_text()
         self.typingEnded.emit()
 
@@ -317,6 +322,10 @@ class Bridge(QObject):
             total = self._typing_adapter.slice_total
             if idx > 0 and total > 0:
                 return f"第{idx}/{total}段"
+        # 剪贴板段号兜底（群赛文三行格式）
+        seg_no = self._text_adapter.segment_no
+        if seg_no:
+            return f"第{seg_no}段"
         return ""
 
     @staticmethod
