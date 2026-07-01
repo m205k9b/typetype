@@ -208,19 +208,14 @@ QQC.Pane {
 
                     //console.log("平台特殊性已暴露到qml中：" + root.isSpecialPlatform);
                     if (!root.isSpecialPlatform) {
-                        //仅在Linux平台生效
-                        if (Qt.platform.os === "linux") {
-                            var keyCount = estimatedKeyCount(preeditText, growLength);
-                            var preeditBackspace = isPreeditBackspace(preeditText, growLength);
-                            if (keyCount > 0) {
-                                for (var i = 0; i < keyCount; i++)
-                                    appBridge.handlePressed();
-                            }
-                            if (preeditBackspace && !root.preeditBackspaceCountedOnPressed) {
-                                appBridge.accumulateBackspace();
-                            }
-                        } else {
-                            appBridge.handlePressed();
+                        var keyCount = estimatedKeyCount(preeditText, growLength);
+                        var preeditBackspace = isPreeditBackspace(preeditText, growLength);
+                        if (keyCount > 0) {
+                            for (var i = 0; i < keyCount; i++)
+                                appBridge.handlePressed();
+                        }
+                        if (preeditBackspace && !root.preeditBackspaceCountedOnPressed) {
+                            appBridge.accumulateBackspace();
                         }
                     }
                     //==============================================
