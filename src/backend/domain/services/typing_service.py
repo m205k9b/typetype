@@ -54,7 +54,10 @@ class TypingState:
     peak_speed: float = 0.0
     peak_key_stroke: float = 0.0
     peak_code_length: float = float("inf")
+    typing_start_time_ms: float | None = None
+    last_correct_commit_time_ms: float | None = None
     char_commit_times: dict[int, float] = field(default_factory=dict)
+    correct_commit_entries: list[tuple[str, float]] = field(default_factory=list)
     phrase_positions: set[int] = field(default_factory=set)
 
 
@@ -168,7 +171,10 @@ class TypingService:
 
     def start(self) -> None:
         """开始打字。"""
-        self._state.last_commit_time_ms = time() * 1000
+        now_ms = time() * 1000
+        self._state.last_commit_time_ms = now_ms
+        self._state.typing_start_time_ms = now_ms
+        self._state.last_correct_commit_time_ms = None
         self._state.is_started = True
 
     def stop(self) -> None:
@@ -195,7 +201,10 @@ class TypingService:
         self._state.score_data.peak_key_stroke = 0.0
         self._state.score_data.peak_code_length = 0.0
         self._state.last_commit_time_ms = 0.0
+        self._state.typing_start_time_ms = None
+        self._state.last_correct_commit_time_ms = None
         self._state.char_commit_times.clear()
+        self._state.correct_commit_entries.clear()
         self._state.phrase_positions.clear()
         if self._char_stats_service:
             self._char_stats_service.clear()
@@ -209,10 +218,13 @@ class TypingService:
         self._state.total_chars = total
         self._state.score_data.char_count = 0
         self._state.score_data.wrong_char_count = 0
+        self._state.score_data.slow_chars = []
         self._state.wrong_char_prefix_sum = {}
         self._state.peak_speed = 0.0
         self._state.peak_key_stroke = 0.0
         self._state.peak_code_length = float("inf")
+        self._state.last_correct_commit_time_ms = None
+        self._state.correct_commit_entries.clear()
 
     def set_plain_doc(self, text: str) -> None:
         """设置目标文本。"""
@@ -262,6 +274,30 @@ class TypingService:
         """统计文本中非标点字符数（用于标顶场景的打词判定）。"""
         return sum(1 for c in text if c not in EXCLUDE_PUNCTS)
 
+    @staticmethod
+    def _normalize_slow_entry_text(text: str) -> str:
+        """慢条目不展示、不按标点区分。"""
+        return "".join(c for c in text if c not in EXCLUDE_PUNCTS)
+
+    def _build_slow_commit_entries(
+        self, threshold_ms: float = 500.0, limit: int = 10
+    ) -> list[tuple[str, float]]:
+        slowest_by_text: dict[str, float] = {}
+        for text, elapsed_ms in self._state.correct_commit_entries:
+            normalized = self._normalize_slow_entry_text(text)
+            if not normalized or elapsed_ms < threshold_ms:
+                continue
+            current = slowest_by_text.get(normalized)
+            if current is None or elapsed_ms > current:
+                slowest_by_text[normalized] = elapsed_ms
+
+        result = [
+            (text, round(elapsed_ms / 1000, 1))
+            for text, elapsed_ms in slowest_by_text.items()
+        ]
+        result.sort(key=lambda item: item[1], reverse=True)
+        return result[:limit]
+
     def handle_committed_text(
         self, s: str, grow_length: int
     ) -> tuple[list[tuple[int, str, bool]], bool]:
@@ -294,12 +330,16 @@ class TypingService:
             # 当一次提交中包含 ≥2 个非标点字符时，所有非标点字符标记为"词组"
             # 标点字符完全不参与打词率计算（排除标顶干扰）
             non_punct_count = self._count_non_punct(s)
+            commit_text_chars: list[str] = []
+            commit_has_error = False
             for i in range(len(s)):
                 pos = begin_pos + i
                 if pos >= self._state.total_chars:
                     break
                 char = self._state.plain_doc[pos]
                 is_error = s[i] != char
+                commit_text_chars.append(char)
+                commit_has_error = commit_has_error or is_error
                 char_updates.append((pos, char, is_error))
 
                 # 更新 prefix_sum
@@ -333,6 +373,22 @@ class TypingService:
                 # 累积字符统计
                 if self._char_stats_service:
                     self._char_stats_service.accumulate(char, per_char_ms, is_error)
+
+            if commit_text_chars and not commit_has_error:
+                base_time_ms = self._state.last_correct_commit_time_ms
+                if base_time_ms is None:
+                    base_time_ms = self._state.typing_start_time_ms
+                if base_time_ms is not None:
+                    correct_commit_text = "".join(commit_text_chars)
+                    correct_elapsed_ms = max(0.0, now_ms - base_time_ms)
+                    self._state.correct_commit_entries.append(
+                        (correct_commit_text, correct_elapsed_ms)
+                    )
+                    self._state.last_correct_commit_time_ms = now_ms
+                    log_debug(
+                        f"[TypingService] correct_commit: text='{correct_commit_text}' "
+                        f"elapsed_ms={correct_elapsed_ms:.0f}"
+                    )
 
             self._state.last_commit_time_ms = now_ms
             self._state.score_data.char_count += grow_length
@@ -395,42 +451,28 @@ class TypingService:
             self._char_stats_service.flush_async()
 
     def capture_slow_chars(self) -> None:
-        """捕获慢字条目到 score_data 中。
-
-        必须在 flush_char_stats() 之前调用，否则 _dirty 被清空后无法获取。
-        """
-        if self._char_stats_service:
-            log_debug(
-                f"[TypingService] capture_slow_chars: "
-                f"plain_doc='{self._state.plain_doc}' "
-                f"phrase_positions={sorted(self._state.phrase_positions)}"
-            )
-            self._state.score_data.slow_chars = (
-                self._char_stats_service.get_slow_entries(
-                    self._state.plain_doc,
-                    phrase_positions=self._state.phrase_positions,
-                )
-            )
-            log_debug(
-                f"[TypingService] capture_slow_chars result: {self._state.score_data.slow_chars}"
-            )
+        """捕获当前会话的慢条目到 score_data 中。"""
+        log_debug(
+            f"[TypingService] capture_slow_chars: "
+            f"correct_commit_entries={self._state.correct_commit_entries}"
+        )
+        self._state.score_data.slow_chars = self._build_slow_commit_entries()
+        log_debug(
+            f"[TypingService] capture_slow_chars result: {self._state.score_data.slow_chars}"
+        )
 
     def get_history_record(self) -> dict[str, float | int | str | list]:
         """获取历史记录。
 
-        NOTE: slow_chars 可能已由外部在 flush_char_stats() 之前捕获到
-        score_data.slow_chars 中（见 TypingAdapter._check_typing_complete）。
-        优先使用预捕获值，避免 flush 后 _dirty 为空导致数据丢失。
+        NOTE: slow_chars 可能已由外部预捕获到 score_data.slow_chars 中
+        （见 TypingAdapter._check_typing_complete）。优先使用预捕获值。
         """
         self._state.score_data.date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         word_typing_rate = self._compute_word_typing_rate()
         self._state.score_data.word_typing_rate = word_typing_rate
         slow_chars = self._state.score_data.slow_chars or []
-        if not slow_chars and self._char_stats_service:
-            slow_chars = self._char_stats_service.get_slow_entries(
-                self._state.plain_doc,
-                phrase_positions=self._state.phrase_positions,
-            )
+        if not slow_chars:
+            slow_chars = self._build_slow_commit_entries()
         return {
             "speed": round(self._state.score_data.speed, 2),
             "keyStroke": round(self._state.score_data.keyStroke, 2),

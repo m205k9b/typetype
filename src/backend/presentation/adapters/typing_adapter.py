@@ -192,7 +192,7 @@ class TypingAdapter(QObject):
             changed = self._typing_service.set_read_only(True)
             if changed:
                 self.readOnlyChanged.emit()
-            # 捕获慢字和峰值（必须在 flush_char_stats 之前，否则 _dirty 被清空）
+            # 捕获慢条目和峰值，确保后续清理/切片切换前已有快照
             ts = self._typing_service
             ts.update_peaks()
             ts.score_data.peak_speed = ts.peak_speed
