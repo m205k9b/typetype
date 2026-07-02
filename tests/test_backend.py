@@ -470,6 +470,61 @@ class TestBridgeSpecialPlatform:
         assert typing_adapter.score_data.backspace_count == 0
         assert typing_adapter.score_data.key_stroke_count == 1
 
+    def test_selection_key_is_recorded_and_consumed_on_special_platform(self):
+        typing_adapter, text_adapter, auth_adapter, char_stats_adapter = (
+            self._create_mock_services()
+        )
+        listener = DummyListener()
+        bridge = Bridge(
+            typing_adapter=typing_adapter,
+            text_adapter=text_adapter,
+            auth_adapter=auth_adapter,
+            char_stats_adapter=char_stats_adapter,
+            key_listener=cast(GlobalKeyListener, listener),
+        )
+        typing_adapter.handleStartStatus(True)
+        bridge.setLowerPaneFocused(True)
+
+        bridge.on_key_received(KeyCodes.EVDEV_SEMICOLON, "linux-kbd")
+
+        assert bridge.consumePendingSelectionKey() is True
+        assert bridge.consumePendingSelectionKey() is False
+        assert typing_adapter.score_data.key_stroke_count == 1
+
+    def test_selection_key_ignored_without_focus(self):
+        typing_adapter, text_adapter, auth_adapter, char_stats_adapter = (
+            self._create_mock_services()
+        )
+        listener = DummyListener()
+        bridge = Bridge(
+            typing_adapter=typing_adapter,
+            text_adapter=text_adapter,
+            auth_adapter=auth_adapter,
+            char_stats_adapter=char_stats_adapter,
+            key_listener=cast(GlobalKeyListener, listener),
+        )
+
+        bridge.on_key_received(KeyCodes.EVDEV_SEMICOLON, "linux-kbd")
+
+        assert bridge.consumePendingSelectionKey() is False
+
+    def test_accumulate_selection_updates_score_data(self):
+        typing_adapter, text_adapter, auth_adapter, char_stats_adapter = (
+            self._create_mock_services()
+        )
+        bridge = Bridge(
+            typing_adapter=typing_adapter,
+            text_adapter=text_adapter,
+            auth_adapter=auth_adapter,
+            char_stats_adapter=char_stats_adapter,
+        )
+        typing_adapter.handleStartStatus(True)
+
+        bridge.accumulateSelection()
+
+        assert typing_adapter.score_data.selection_count == 1
+        assert bridge.selection == 1
+
     def test_macos_backspace_key_accumulates_backspace_and_key_stroke(self):
         """macOS delete/backspace 键应同时累积退格次数和击键数。"""
         typing_adapter, text_adapter, auth_adapter, char_stats_adapter = (

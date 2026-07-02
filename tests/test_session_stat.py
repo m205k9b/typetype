@@ -43,6 +43,11 @@ class TestSessionStatInitialization:
         )
         assert score.key_stroke_count == 0
 
+    def test_negative_selection_count_correction(self):
+        """测试负选重次数的自动修正"""
+        score = SessionStat(selection_count=-3)
+        assert score.selection_count == 0
+
     def test_auto_date_generation(self):
         """测试自动生成时间戳"""
         score = SessionStat(

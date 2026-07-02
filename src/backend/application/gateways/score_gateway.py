@@ -67,6 +67,7 @@ class ScoreGateway:
         total_wrong = sum(s["wrong_char_count"] for s in slice_stats)
         total_backspace = sum(s["backspace_count"] for s in slice_stats)
         total_correction = sum(s["correction_count"] for s in slice_stats)
+        total_selection = sum(s.get("selection_count", 0) for s in slice_stats)
         total_time = sum(s["time"] for s in slice_stats)
         total_key_strokes = sum(s.get("key_stroke_count", 0) for s in slice_stats)
         key_accuracy = (
@@ -86,6 +87,7 @@ class ScoreGateway:
             ("错字", f"{total_wrong}", "字"),
             ("回改", f"{total_correction}", "次"),
             ("退格", f"{total_backspace}", "次"),
+            ("选重", f"{total_selection}", "次"),
             ("键准", f"{key_accuracy:.2f}", "%"),
             ("字数", f"{total_chars}", ""),
             ("用时", f"{total_time:.3f}", "秒"),
@@ -117,6 +119,7 @@ class ScoreGateway:
         total_wrong = sum(s["wrong_char_count"] for s in slice_stats)
         total_backspace = sum(s["backspace_count"] for s in slice_stats)
         total_correction = sum(s["correction_count"] for s in slice_stats)
+        total_selection = sum(s.get("selection_count", 0) for s in slice_stats)
         total_time = sum(s["time"] for s in slice_stats)
         total_key_strokes = sum(s.get("key_stroke_count", 0) for s in slice_stats)
         key_accuracy = (
@@ -137,6 +140,7 @@ class ScoreGateway:
             f" 用时{total_time:.3f}秒"
             f" 键准{key_accuracy:.2f}%"
             f" 回改{total_correction}"
+            f" 选重{total_selection}"
             f" 键数{total_key_strokes}"
             f" 退格{total_backspace}"
         )

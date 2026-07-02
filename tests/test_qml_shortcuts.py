@@ -37,11 +37,10 @@ def test_linux_preedit_backspace_counts_as_backspace():
 
     assert "function isPreeditBackspace(preedit, growLength)" in source
     assert "root.lastPreeditText.indexOf(preedit) === 0" in source
-    assert "var preeditBackspace = isPreeditBackspace(preeditText, growLength)" in source
     assert (
-        "if (preeditBackspace && !root.preeditBackspaceCountedOnPressed)"
-        in source
+        "var preeditBackspace = isPreeditBackspace(preeditText, growLength)" in source
     )
+    assert "if (preeditBackspace && !root.preeditBackspaceCountedOnPressed)" in source
 
 
 def test_committed_text_backspace_does_not_count_as_backspace():
@@ -56,6 +55,19 @@ def test_committed_text_backspace_does_not_count_as_backspace():
     assert "root.preeditBackspaceCountedOnPressed = true" in source
     assert "if (growLength < 0)" in source
     assert "appBridge.accumulateCorrection();" in source
+
+
+def test_selection_count_consumes_special_platform_pending_key_on_preedit_commit():
+    lower_pane = PROJECT_ROOT / "src/qml/typing/LowerPane.qml"
+
+    source = lower_pane.read_text(encoding="utf-8")
+
+    assert "var mayCommitSelection = root.lastPreeditText.length > 0" in source
+    assert "preeditText === ''" in source
+    assert "growLength > 0" in source
+    assert "appBridge.consumePendingSelectionKey()" in source
+    assert "appBridge.accumulateSelection();" in source
+    assert "appBridge.clearPendingSelectionKey();" in source
 
 
 def test_main_window_auto_pauses_when_deactivated():
@@ -137,7 +149,9 @@ def test_history_area_shows_wenlai_segment_and_right_click_copies_record_score()
     source = history_area.read_text(encoding="utf-8")
 
     assert '"段号"' in source
+    assert '"选重"' in source
     assert 'TableModelColumn { display: "segmentNo" }' in source
+    assert 'TableModelColumn { display: "selectionCount" }' in source
     assert 'TableModelColumn { display: "speed" }' in source
     assert source.index('display: "segmentNo"') < source.index('display: "speed"')
     assert "Qt.RightButton" in source

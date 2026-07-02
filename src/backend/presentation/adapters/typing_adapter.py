@@ -47,6 +47,7 @@ class TypingAdapter(QObject):
     historyRecordUpdated = Signal(dict)
     backspaceChanged = Signal()
     correctionChanged = Signal()
+    selectionChanged = Signal()
     keyAccuracyChanged = Signal()
     pauseChanged = Signal()
     # 会话状态机信号
@@ -93,6 +94,7 @@ class TypingAdapter(QObject):
         # 信号发射缓存（避免无变化时重复触发 QML 重新评估）
         self._last_backspace_count = 0
         self._last_correction_count = 0
+        self._last_selection_count = 0
 
         # 订阅状态机事件
         if self._session_context:
@@ -150,6 +152,7 @@ class TypingAdapter(QObject):
         """同步 backspace/correction 缓存，避免 clear() 后重复发射信号。"""
         self._last_backspace_count = self._typing_service.score_data.backspace_count
         self._last_correction_count = self._typing_service.score_data.correction_count
+        self._last_selection_count = self._typing_service.score_data.selection_count
 
     def _emit_typing_signals(self) -> None:
         self._typing_service.update_peaks()
@@ -166,6 +169,10 @@ class TypingAdapter(QObject):
         if correction_count != self._last_correction_count:
             self._last_correction_count = correction_count
             self.correctionChanged.emit()
+        selection_count = self._typing_service.score_data.selection_count
+        if selection_count != self._last_selection_count:
+            self._last_selection_count = selection_count
+            self.selectionChanged.emit()
 
     def _set_paused(self, paused: bool) -> None:
         if self._is_paused != paused:
@@ -208,6 +215,7 @@ class TypingAdapter(QObject):
                     "wrong_char_count": s.wrong_char_count,
                     "backspace_count": s.backspace_count,
                     "correction_count": s.correction_count,
+                    "selection_count": s.selection_count,
                     "char_count": s.char_count,
                     "key_stroke_count": s.key_stroke_count,
                     "time": s.time,
@@ -339,6 +347,11 @@ class TypingAdapter(QObject):
             self.keyStrokeChanged.emit()
             self.keyAccuracyChanged.emit()
 
+    def handleSelection(self) -> None:
+        if self._typing_service.state.is_started:
+            self._typing_service.accumulate_selection()
+            self.selectionChanged.emit()
+
     def handleCommittedText(self, s: str, grow_length: int) -> None:
         # 评分完成后的异步窗口内 UpperPane 可能已被清空，此时残留的 IME
         # 回流或 onTextChanged 会产生越界 setPosition。read_only 已在
@@ -437,6 +450,7 @@ class TypingAdapter(QObject):
                     self._session_context.start_typing()
                 self.backspaceChanged.emit()
                 self.correctionChanged.emit()
+                self.selectionChanged.emit()
             else:
                 self._second_timer.stop()
                 self._typing_service.stop()
@@ -445,12 +459,14 @@ class TypingAdapter(QObject):
                 self._reset_signal_cache()
                 self.backspaceChanged.emit()
                 self.correctionChanged.emit()
+                self.selectionChanged.emit()
         elif not status:
             # is_started 已为 False 时再次调用（如清空输入区）：保留 is_paused
             self._typing_service.clear()
             self._reset_signal_cache()
             self.backspaceChanged.emit()
             self.correctionChanged.emit()
+            self.selectionChanged.emit()
         changed = self._typing_service.set_read_only(False)
         if changed:
             self.readOnlyChanged.emit()
@@ -502,6 +518,10 @@ class TypingAdapter(QObject):
     @property
     def correction_count(self) -> int:
         return self._typing_service.correction_count
+
+    @property
+    def selection_count(self) -> int:
+        return self._typing_service.selection_count
 
     @property
     def key_accuracy(self) -> float:

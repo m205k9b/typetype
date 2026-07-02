@@ -205,6 +205,14 @@ QQC.Pane {
                             appBridge.handlePressed(); // 第一下按键别忘了统计, 后续按键由全局监听器统计
                         }
                     }
+                    var mayCommitSelection = root.lastPreeditText.length > 0
+                        && preeditText === ''
+                        && growLength > 0;
+                    if (mayCommitSelection && appBridge.consumePendingSelectionKey()) {
+                        appBridge.accumulateSelection();
+                    } else if (!mayCommitSelection && growLength !== 0) {
+                        appBridge.clearPendingSelectionKey();
+                    }
 
                     //console.log("平台特殊性已暴露到qml中：" + root.isSpecialPlatform);
                     if (!root.isSpecialPlatform) {

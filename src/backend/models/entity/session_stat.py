@@ -26,6 +26,7 @@ class SessionStat:
     wrong_char_count: int = 0
     backspace_count: int = 0
     correction_count: int = 0
+    selection_count: int = 0 # 选重
     date: str = ""
 
     # 峰值统计
@@ -53,6 +54,8 @@ class SessionStat:
             self.backspace_count = 0
         if self.correction_count < 0:
             self.correction_count = 0
+        if self.selection_count < 0:
+            self.selection_count = 0
         if not self.date:
             self.date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 

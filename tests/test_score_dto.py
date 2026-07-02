@@ -1,7 +1,13 @@
 """成绩 DTO 测试。"""
 
+from src.backend.application.gateways.score_gateway import ScoreGateway
 from src.backend.models.dto.score_dto import HistoryRecordDTO, ScoreSummaryDTO
 from src.backend.models.entity.session_stat import SessionStat
+
+
+class DummyClipboard:
+    def setText(self, text, mode=None):
+        self.text = text
 
 
 class TestHistoryRecordDTO:
@@ -27,6 +33,7 @@ class TestHistoryRecordDTO:
             "wrongNum",
             "correctionCount",
             "backspaceCount",
+            "selectionCount",
             "keyAccuracy",
             "wordTypingRate",
             "biaoDingCount",
@@ -41,6 +48,7 @@ class TestHistoryRecordDTO:
             "wrongNum": 10,
             "correctionCount": 0,
             "backspaceCount": 0,
+            "selectionCount": 0,
             "keyAccuracy": 100.0,
             "charNum": 240,
             "time": 60.0,
@@ -65,7 +73,7 @@ class TestScoreSummaryDTO:
 
         dto = ScoreSummaryDTO.from_score_data(score)
 
-        assert len(dto.items) == 12
+        assert len(dto.items) == 13
         assert dto.items[0].label == "速度"
         assert dto.items[0].unit == "字/分"
         assert dto.items[1].label == "击键"
@@ -78,20 +86,22 @@ class TestScoreSummaryDTO:
         assert dto.items[4].unit == "次"
         assert dto.items[5].label == "退格"
         assert dto.items[5].unit == "次"
-        assert dto.items[6].label == "键准"
-        assert dto.items[6].unit == "%"
-        assert dto.items[7].label == "字数"
-        assert dto.items[7].unit == ""
-        assert dto.items[8].label == "用时"
-        assert dto.items[8].unit == "秒"
-        assert dto.items[9].label == "键数"
-        assert dto.items[9].unit == ""
-        assert dto.items[10].label == "打词率"
-        assert dto.items[10].unit == "%"
-        assert dto.items[10].value_format == ".1f"
-        assert dto.items[11].label == "标顶"
-        assert dto.items[11].unit == "次"
-        assert dto.items[11].value_format == "d"
+        assert dto.items[6].label == "选重"
+        assert dto.items[6].unit == "次"
+        assert dto.items[7].label == "键准"
+        assert dto.items[7].unit == "%"
+        assert dto.items[8].label == "字数"
+        assert dto.items[8].unit == ""
+        assert dto.items[9].label == "用时"
+        assert dto.items[9].unit == "秒"
+        assert dto.items[10].label == "键数"
+        assert dto.items[10].unit == ""
+        assert dto.items[11].label == "打词率"
+        assert dto.items[11].unit == "%"
+        assert dto.items[11].value_format == ".1f"
+        assert dto.items[12].label == "标顶"
+        assert dto.items[12].unit == "次"
+        assert dto.items[12].value_format == "d"
 
     def test_to_clipboard_text(self):
         """应输出木易跟打器风格单行纯文本"""
@@ -115,6 +125,7 @@ class TestScoreSummaryDTO:
         assert "速度190.00" in text
         assert "字数240" in text
         assert "键数300" in text
+        assert "选重0" in text
         assert "打词率" in text
 
     def test_to_plain_text(self):
@@ -150,3 +161,40 @@ class TestScoreSummaryDTO:
         assert "</b>" in text
         assert "<br>" in text
         assert "打词率" in text
+
+
+class TestAggregateScore:
+    def test_selection_count_is_summed(self):
+        gateway = ScoreGateway(DummyClipboard())
+        slice_stats = [
+            {
+                "speed": 100.0,
+                "keyStroke": 5.0,
+                "codeLength": 2.0,
+                "char_count": 10,
+                "wrong_char_count": 0,
+                "backspace_count": 1,
+                "correction_count": 0,
+                "selection_count": 2,
+                "time": 6.0,
+                "key_stroke_count": 50,
+            },
+            {
+                "speed": 120.0,
+                "keyStroke": 6.0,
+                "codeLength": 2.0,
+                "char_count": 10,
+                "wrong_char_count": 1,
+                "backspace_count": 0,
+                "correction_count": 1,
+                "selection_count": 3,
+                "time": 5.0,
+                "key_stroke_count": 60,
+            },
+        ]
+
+        html = gateway.build_aggregate_message(slice_stats, 2)
+        plain = gateway.build_aggregate_plain_text(slice_stats, 2)
+
+        assert "选重: <b>5</b> 次" in html
+        assert "选重5" in plain

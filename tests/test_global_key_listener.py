@@ -47,6 +47,15 @@ class TestGlobalKeyListenerLogic:
         listener._pressed_shortcut_modifiers = {}
         return listener
 
+    def test_selection_key_codes_are_recognized(self):
+        assert KeyCodes.is_selection_key(KeyCodes.EVDEV_2) is True
+        assert KeyCodes.is_selection_key(KeyCodes.EVDEV_SEMICOLON) is True
+        assert KeyCodes.is_selection_key(KeyCodes.EVDEV_APOSTROPHE) is True
+        assert KeyCodes.is_selection_key(KeyCodes.MACOS_2) is True
+        assert KeyCodes.is_selection_key(KeyCodes.MACOS_SEMICOLON) is True
+        assert KeyCodes.is_selection_key(KeyCodes.MACOS_APOSTROPHE) is True
+        assert KeyCodes.is_selection_key(KeyCodes.EVDEV_1) is False
+
     def test_is_keyboard_strict_true(self):
         listener = self._listener_with_ecodes()
         dev = FakeDevice({1: [1, 30, 48]})

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from time import monotonic
 from typing import TYPE_CHECKING, Callable
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
@@ -18,7 +19,7 @@ from PySide6.QtQuick import QQuickTextDocument
 
 from ..config.app_paths import user_config_dir
 from ..ports.key_codes import KeyCodes
-from ..utils.logger import log_info
+from ..utils.logger import log_debug, log_info
 
 
 if TYPE_CHECKING:
@@ -77,6 +78,7 @@ class Bridge(QObject):
     specialPlatformConfirmed = Signal(bool)
     backspaceChanged = Signal()
     correctionChanged = Signal()
+    selectionChanged = Signal()
     keyAccuracyChanged = Signal()
     typingPausedChanged = Signal()
     weakestCharsLoaded = Signal(list)
@@ -188,6 +190,8 @@ class Bridge(QObject):
         self._text_slice_progress_store = text_slice_progress_store
         self._is_special_platform = key_listener is not None
         self._lower_pane_focused = False
+        self._pending_selection_key = 0
+        self._pending_selection_at = 0.0
         self._text_id = 0
         self._pending_history_segment_label = ""
         self._pending_history_score_text = ""
@@ -259,6 +263,7 @@ class Bridge(QObject):
         self._typing_adapter.historyRecordUpdated.connect(self._on_history_record)
         self._typing_adapter.backspaceChanged.connect(self.backspaceChanged.emit)
         self._typing_adapter.correctionChanged.connect(self.correctionChanged.emit)
+        self._typing_adapter.selectionChanged.connect(self.selectionChanged.emit)
         self._typing_adapter.keyAccuracyChanged.connect(self.keyAccuracyChanged.emit)
         self._typing_adapter.pauseChanged.connect(self._on_typing_pause_changed)
         # 会话状态机信号
@@ -590,6 +595,13 @@ class Bridge(QObject):
         if KeyCodes.is_navigation(keyCode):
             return
 
+        if KeyCodes.is_selection_key(keyCode):
+            self._pending_selection_key = keyCode
+            self._pending_selection_at = monotonic()
+            log_debug(
+                f"[Bridge] pending selection key: keyCode={keyCode} device='{deviceName}'"
+            )
+
         if (
             not self._typing_adapter.is_started
             and not self._typing_adapter.text_read_only
@@ -662,6 +674,10 @@ class Bridge(QObject):
     @Property(int, notify=correctionChanged)
     def correction(self) -> int:
         return self._typing_adapter.correction_count
+
+    @Property(int, notify=selectionChanged)
+    def selection(self) -> int:
+        return self._typing_adapter.selection_count
 
     @Property(float, notify=keyAccuracyChanged)
     def keyAccuracy(self) -> float:
@@ -871,9 +887,34 @@ class Bridge(QObject):
     def accumulateBackspace(self) -> None:
         self._typing_adapter.handleBackspace()
 
+    @Slot()
+    def accumulateSelection(self) -> None:
+        self._typing_adapter.handleSelection()
+
+    @Slot(result=bool)
+    def consumePendingSelectionKey(self) -> bool:
+        if self._pending_selection_key == 0:
+            return False
+        age_ms = (monotonic() - self._pending_selection_at) * 1000
+        key_code = self._pending_selection_key
+        self._pending_selection_key = 0
+        self._pending_selection_at = 0.0
+        accepted = age_ms <= 800
+        log_debug(
+            f"[Bridge] consume selection key: accepted={accepted} keyCode={key_code} ageMs={age_ms:.0f}"
+        )
+        return accepted
+
+    @Slot()
+    def clearPendingSelectionKey(self) -> None:
+        self._pending_selection_key = 0
+        self._pending_selection_at = 0.0
+
     @Slot(bool)
     def setLowerPaneFocused(self, focused: bool) -> None:
         self._lower_pane_focused = focused
+        if not focused:
+            self.clearPendingSelectionKey()
 
     @Slot(str, int)
     def handleCommittedText(self, s: str, growLength: int) -> None:

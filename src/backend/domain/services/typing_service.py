@@ -110,6 +110,10 @@ class TypingService:
         return self._state.score_data.correction_count
 
     @property
+    def selection_count(self) -> int:
+        return self._state.score_data.selection_count
+
+    @property
     def key_accuracy(self) -> float:
         return self._state.score_data.keyAccuracy
 
@@ -183,6 +187,7 @@ class TypingService:
         self._state.score_data.key_stroke_count = 0
         self._state.score_data.backspace_count = 0
         self._state.score_data.correction_count = 0
+        self._state.score_data.selection_count = 0
         self._state.score_data.date = ""
         self._state.score_data.slow_chars = []
         self._state.score_data.biao_ding_count = 0
@@ -243,6 +248,10 @@ class TypingService:
     def accumulate_correction(self) -> None:
         """累积回改次数（一次删除操作算一次）。"""
         self._state.score_data.correction_count += 1
+
+    def accumulate_selection(self) -> None:
+        """累积选重次数。"""
+        self._state.score_data.selection_count += 1
 
     def accumulate_time(self, interval: float) -> None:
         """累积时间。"""
@@ -429,6 +438,7 @@ class TypingService:
             "wrongNum": self._state.score_data.wrong_char_count,
             "correctionCount": self._state.score_data.correction_count,
             "backspaceCount": self._state.score_data.backspace_count,
+            "selectionCount": self._state.score_data.selection_count,
             "keyAccuracy": round(self._state.score_data.keyAccuracy, 2),
             "charNum": self._state.score_data.char_count,
             "time": round(self._state.score_data.time, 2),

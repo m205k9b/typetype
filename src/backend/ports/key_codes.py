@@ -21,6 +21,20 @@ class KeyCodes:
     EVDEV_RIGHT_META = 126
     EVDEV_COMPOSE = 127
 
+    # Candidate selection keys (evdev key codes).
+    EVDEV_1 = 2
+    EVDEV_2 = 3
+    EVDEV_3 = 4
+    EVDEV_4 = 5
+    EVDEV_5 = 6
+    EVDEV_6 = 7
+    EVDEV_7 = 8
+    EVDEV_8 = 9
+    EVDEV_9 = 10
+    EVDEV_0 = 11
+    EVDEV_SEMICOLON = 39
+    EVDEV_APOSTROPHE = 40
+
     # Navigation keys (evdev key codes)
     EVDEV_HOME = 102
     EVDEV_UP = 103
@@ -57,6 +71,20 @@ class KeyCodes:
     MACOS_RIGHT_CONTROL = MACOS_KEY_OFFSET + 62
     MACOS_FUNCTION = MACOS_KEY_OFFSET + 63
 
+    # Candidate selection keys (macOS hardware keycodes).
+    MACOS_1 = MACOS_KEY_OFFSET + 18
+    MACOS_2 = MACOS_KEY_OFFSET + 19
+    MACOS_3 = MACOS_KEY_OFFSET + 20
+    MACOS_4 = MACOS_KEY_OFFSET + 21
+    MACOS_5 = MACOS_KEY_OFFSET + 23
+    MACOS_6 = MACOS_KEY_OFFSET + 22
+    MACOS_7 = MACOS_KEY_OFFSET + 26
+    MACOS_8 = MACOS_KEY_OFFSET + 28
+    MACOS_9 = MACOS_KEY_OFFSET + 25
+    MACOS_0 = MACOS_KEY_OFFSET + 29
+    MACOS_SEMICOLON = MACOS_KEY_OFFSET + 41
+    MACOS_APOSTROPHE = MACOS_KEY_OFFSET + 39
+
     BACKSPACE_KEYS = frozenset({EVDEV_BACKSPACE, MACOS_BACKSPACE, MACOS_FORWARD_DELETE})
     MODIFIER_KEYS = frozenset(
         {
@@ -92,6 +120,33 @@ class KeyCodes:
             MACOS_LEFT_COMMAND,
             MACOS_LEFT_CONTROL,
             MACOS_RIGHT_CONTROL,
+        }
+    )
+
+    SELECTION_KEYS = frozenset(
+        {
+            EVDEV_2,
+            EVDEV_3,
+            EVDEV_4,
+            EVDEV_5,
+            EVDEV_6,
+            EVDEV_7,
+            EVDEV_8,
+            EVDEV_9,
+            EVDEV_0,
+            EVDEV_SEMICOLON,
+            EVDEV_APOSTROPHE,
+            MACOS_2,
+            MACOS_3,
+            MACOS_4,
+            MACOS_5,
+            MACOS_6,
+            MACOS_7,
+            MACOS_8,
+            MACOS_9,
+            MACOS_0,
+            MACOS_SEMICOLON,
+            MACOS_APOSTROPHE,
         }
     )
 
@@ -138,3 +193,7 @@ class KeyCodes:
     @classmethod
     def is_shortcut_modifier(cls, key_code: int) -> bool:
         return key_code in cls.SHORTCUT_MODIFIER_KEYS
+
+    @classmethod
+    def is_selection_key(cls, key_code: int) -> bool:
+        return key_code in cls.SELECTION_KEYS

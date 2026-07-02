@@ -95,6 +95,7 @@
 | `handlePressed` | 无 | 处理按键事件 |
 | `accumulateCorrection` | 无 | 累积回改次数（QML 文本删除时调用） |
 | `accumulateBackspace` | 无 | 累积退格次数（QML 退格键按下时调用） |
+| `accumulateSelection` | 无 | 累积选重次数 |
 | `setLowerPaneFocused` | `(bool focused)` | 设置输入区焦点状态 |
 | `handleCommittedText` | `(str s, int growLength)` | 处理提交的文本 |
 | `handleLoadedText` | `(QQuickTextDocument doc, str text="")` | 处理已加载的文本文档（可选 text 确保内容正确） |
@@ -111,6 +112,8 @@
 | `setCursorPos` | `(int newPos)` | 设置光标位置 |
 | `getScoreMessage` | → `str` | 获取成绩摘要消息 |
 | `copyScoreMessage` | 无 | 复制成绩到剪贴板 |
+| `consumePendingSelectionKey` | → `bool` | 消费特殊平台底层监听捕获的候选选择键 |
+| `clearPendingSelectionKey` | 无 | 清空待匹配候选选择键 |
 | `login` | `(str username, str password)` | 登录 |
 | `register` | `(str username, str password, str nickname)` | 注册 |
 | `logout` | 无 | 登出 |

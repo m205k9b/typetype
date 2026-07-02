@@ -7,7 +7,7 @@ QQC.Pane {
     id: root
     property int rowHeight: 30
     property alias tableModel: tableView.model
-    property var defaultColumnWidths: [64, 86, 72, 72, 72, 64, 64, 72, 72, 72, 132]
+    property var defaultColumnWidths: [64, 86, 72, 72, 72, 64, 64, 64, 72, 72, 72, 132]
 
     padding: 0
 
@@ -42,7 +42,7 @@ QQC.Pane {
         property color borderColor: Theme.currentTheme ? Theme.currentTheme.colors.dividerBorderColor : "#e0e0e0"
         property color textColor: Theme.currentTheme ? Theme.currentTheme.colors.textSecondaryColor : palette.windowText
 
-        model: ["段号", "速度", "击键", "码长", "错字", "回改", "退格", "键准", "字数", "用时", "日期"]
+        model: ["段号", "速度", "击键", "码长", "错字", "回改", "退格", "选重", "键准", "字数", "用时", "日期"]
 
         delegate: Rectangle {
             required property int column
@@ -84,6 +84,7 @@ QQC.Pane {
             TableModelColumn { display: "wrongNum" }
             TableModelColumn { display: "correctionCount" }
             TableModelColumn { display: "backspaceCount" }
+            TableModelColumn { display: "selectionCount" }
             TableModelColumn { display: "keyAccuracy" }
             TableModelColumn { display: "charNum" }
             TableModelColumn { display: "time" }
@@ -118,6 +119,7 @@ QQC.Pane {
                         "wrongNum",
                         "correctionCount",
                         "backspaceCount",
+                        "selectionCount",
                         "keyAccuracy",
                         "charNum",
                         "time",

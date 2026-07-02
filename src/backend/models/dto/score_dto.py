@@ -72,6 +72,12 @@ class ScoreSummaryDTO:
                     value_format="d",
                 ),
                 ScoreSummaryItemDTO(
+                    label="选重",
+                    value=score_data.selection_count,
+                    unit="次",
+                    value_format="d",
+                ),
+                ScoreSummaryItemDTO(
                     label="键准",
                     value=score_data.keyAccuracy,
                     unit="%",
@@ -171,6 +177,7 @@ class HistoryRecordDTO:
     wrong_num: int
     backspace_count: int
     correction_count: int
+    selection_count: int
     char_num: int
     time: float
     date: str
@@ -188,6 +195,7 @@ class HistoryRecordDTO:
             wrong_num=score_data.wrong_char_count,
             backspace_count=score_data.backspace_count,
             correction_count=score_data.correction_count,
+            selection_count=score_data.selection_count,
             char_num=score_data.char_count,
             time=round(score_data.time, 2),
             date=score_data.date,
@@ -205,6 +213,7 @@ class HistoryRecordDTO:
             "wrongNum": self.wrong_num,
             "correctionCount": self.correction_count,
             "backspaceCount": self.backspace_count,
+            "selectionCount": self.selection_count,
             "keyAccuracy": self.key_accuracy,
             "wordTypingRate": self.word_typing_rate,
             "biaoDingCount": self.biao_ding_count,
