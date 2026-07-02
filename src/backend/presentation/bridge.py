@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from .adapters.typing_adapter import TypingAdapter
     from .adapters.upload_text_adapter import UploadTextAdapter
     from .adapters.wenlai_adapter import WenlaiAdapter
+    from .adapters.ai_text_adapter import AiTextAdapter
     from .adapters.font_adapter import FontAdapter
     from .adapters.ziti_adapter import ZitiAdapter
 
@@ -101,6 +102,7 @@ class Bridge(QObject):
     eligibilityReasonChanged = Signal(str)
     baseUrlChanged = Signal()
     windowTitleChanged = Signal()
+    textTitleChanged = Signal()
     typingTotalsChanged = Signal()
     textIdLookupFailed = Signal()  # 本地 text_id 回查失败
     # 晴发文信号
@@ -112,6 +114,12 @@ class Bridge(QObject):
     wenlaiSegmentLabelChanged = Signal()
     wenlaiDifficultiesLoaded = Signal(list)
     wenlaiCategoriesLoaded = Signal(list)
+    # AI 智能推荐信号
+    aiTextGenerated = Signal(str, str)
+    aiTextPartial = Signal(str)  # 流式：当前已累积的全部文本
+    aiTextFailed = Signal(str)
+    aiTextLoadingChanged = Signal()
+    aiConfigChanged = Signal()
     # 本地长文信号
     localArticlesLoaded = Signal(list)
     localArticlesLoadFailed = Signal(str)
@@ -149,6 +157,7 @@ class Bridge(QObject):
         upload_text_adapter: UploadTextAdapter | None = None,
         leaderboard_adapter: LeaderboardAdapter | None = None,
         wenlai_adapter: WenlaiAdapter | None = None,
+        ai_text_adapter: "AiTextAdapter | None" = None,
         local_article_adapter: LocalArticleAdapter | None = None,
         ziti_adapter: ZitiAdapter | None = None,
         trainer_adapter: TrainerAdapter | None = None,
@@ -167,6 +176,7 @@ class Bridge(QObject):
         self._upload_text_adapter = upload_text_adapter
         self._leaderboard_adapter = leaderboard_adapter
         self._wenlai_adapter = wenlai_adapter
+        self._ai_text_adapter = ai_text_adapter
         self._local_article_adapter = local_article_adapter
         self._ziti_adapter = ziti_adapter
         self._trainer_adapter = trainer_adapter
@@ -205,6 +215,7 @@ class Bridge(QObject):
         self._connect_upload_signals()
         self._connect_leaderboard_signals()
         self._connect_wenlai_signals()
+        self._connect_ai_text_signals()
         self._connect_local_article_signals()
         self._connect_ziti_signals()
         self._connect_trainer_signals()
@@ -280,7 +291,7 @@ class Bridge(QObject):
             idx = self._typing_adapter.slice_index
             total = self._typing_adapter.slice_total
             self._pending_history_segment_label = f"{idx}/{total}"
-        else:
+        elif self._wenlai_adapter and self._wenlai_adapter.is_active:
             self._pending_history_segment_label = self.wenlaiSegmentLabel
         # 晴发文段号为空时，回退到剪贴板段号
         if not self._pending_history_segment_label:
@@ -418,6 +429,29 @@ class Bridge(QObject):
         )
         self._wenlai_adapter.categoriesLoaded.connect(self.wenlaiCategoriesLoaded.emit)
 
+    def _connect_ai_text_signals(self) -> None:
+        if not self._ai_text_adapter:
+            return
+        self._ai_text_adapter.textChunk.connect(self._on_ai_text_chunk)
+        self._ai_text_adapter.textGenerated.connect(self._on_ai_text_generated)
+        self._ai_text_adapter.generationFailed.connect(self._on_ai_text_failed)
+        self._ai_text_adapter.loadingChanged.connect(self.aiTextLoadingChanged.emit)
+        self._ai_text_adapter.configChanged.connect(self.aiConfigChanged.emit)
+
+    def _on_ai_text_chunk(self, chunk: str) -> None:
+        """流式：每收到一块文本，发射累积全文信号供 QML 实时显示。"""
+        self._ai_stream_text = getattr(self, "_ai_stream_text", "") + chunk
+        self.aiTextPartial.emit(self._ai_stream_text)
+
+    def _on_ai_text_generated(self, text: str, title: str) -> None:
+        """AI 文本生成完成，走 loadFullText 载入。"""
+        self._ai_stream_text = ""
+        self.loadFullText(text, "ai_recommend", title)
+
+    def _on_ai_text_failed(self, message: str) -> None:
+        self._ai_stream_text = ""
+        self.aiTextFailed.emit(message)
+
     def _connect_local_article_signals(self) -> None:
         if not self._local_article_adapter:
             return
@@ -513,11 +547,21 @@ class Bridge(QObject):
                     ctx._slice_pass_counts[i] = count
         # 恢复 per-slice 指标
         saved_slice_metrics = rp.get("slice_metrics")
-        if saved_slice_metrics and len(saved_slice_metrics) == ctx.slice_total:
-            ctx._slice_metrics = [
-                m.copy() if isinstance(m, dict) else m for m in saved_slice_metrics
-            ]
+        if saved_slice_metrics:
+            # 保存端截断到 slice_index（性能优化），恢复端逐条覆盖 + 默认值填充
+            for i, m in enumerate(saved_slice_metrics):
+                if i < len(ctx._slice_metrics):
+                    ctx._slice_metrics[i] = m.copy() if isinstance(m, dict) else m
             ctx.restore_slice_metrics(ctx.slice_index)
+        # 恢复成绩快照（用于 get_slice_status / check_slice_result 显示历史成绩）
+        saved_slice_stats = rp.get("slice_stats")
+        if saved_slice_stats and ctx._slice_stats is not None:
+            # 初始化 _slice_stats 到正确大小，用 None 填充，再用保存值覆盖
+            while len(ctx._slice_stats) < ctx.slice_total:
+                ctx._slice_stats.append(None)
+            for i, s in enumerate(saved_slice_stats):
+                if i < ctx.slice_total:
+                    ctx._slice_stats[i] = s
         self._pending_restore_key = ""
         self._pending_restored_progress = None
 
@@ -539,6 +583,11 @@ class Bridge(QObject):
 
     def on_key_received(self, keyCode: int, deviceName: str) -> None:
         if not self._lower_pane_focused or KeyCodes.is_modifier(keyCode):
+            return
+
+        # 导航键（方向键/Home/End/PgUp/PgDn/Insert/Delete）不产生文本，
+        # 不应影响码长（key_stroke_count）和击键统计
+        if KeyCodes.is_navigation(keyCode):
             return
 
         if (
@@ -569,6 +618,10 @@ class Bridge(QObject):
     @Property(str, constant=True)
     def defaultTextTitle(self) -> str:
         return self._text_adapter.get_default_source_label()
+
+    @Property(str, notify=textTitleChanged)
+    def textTitle(self) -> str:
+        return self._typing_adapter.text_title
 
     @Property(list, constant=True)
     def textSourceOptions(self) -> list:
@@ -836,6 +889,7 @@ class Bridge(QObject):
         """设置当前文本标题（用于上传）。"""
         self._typing_adapter.setTextTitle(title)
         self.windowTitleChanged.emit()
+        self.textTitleChanged.emit()
 
     @Slot(int)
     def setTextId(self, text_id: int) -> None:
@@ -846,7 +900,10 @@ class Bridge(QObject):
 
     @Slot(str, str)
     @Slot(str, str, str)
-    def loadFullText(self, text: str, source_key: str = "", title: str = "") -> None:
+    @Slot(str, str, str, int)
+    def loadFullText(
+        self, text: str, source_key: str = "", title: str = "", text_id: int = 0
+    ) -> None:
         """全文载入（不分片），走正常文本加载路径。
 
         与 setupSliceMode 的区别：不进入 slice_mode，排行榜/成绩正常工作。
@@ -862,12 +919,23 @@ class Bridge(QObject):
         self._clear_trainer_active()
         self._typing_adapter.prepare_for_text_load()
         self._clear_text_id()
+        if text_id > 0:
+            self._text_id = text_id
+            self._typing_adapter.setTextId(text_id)
+            self.textIdChanged.emit()
         # 设置会话状态机
         self._typing_adapter.setup_custom_session(source_key or "custom")
         display_title = title if title else "自定义文本"
         self._typing_adapter.setTextTitle(display_title)
         self.windowTitleChanged.emit()
-        self.textLoaded.emit(text, -1, display_title)
+        sender = TextLoadCoordinator._build_local_sender_content(
+            display_title,
+            text,
+            index=text_id if text_id > 0 else 0,
+        )
+        if sender:
+            self._copy_text_to_clipboard(sender)
+        self.textLoaded.emit(text, text_id if text_id > 0 else -1, display_title)
         # 异步回查服务端 text_id（复用 TextAdapter 的 localTextIdResolved 信号链）
         lookup_key = source_key if source_key else "custom"
         self._text_adapter.lookup_text_id(lookup_key, text)
@@ -1532,10 +1600,20 @@ class Bridge(QObject):
             if saved_metrics:
                 ctx._apply_metrics_dict(saved_metrics)
             # 恢复 per-slice 指标（已访问片段的降击历史）
-            if saved_slice_metrics and len(saved_slice_metrics) == ctx.slice_total:
-                ctx._slice_metrics = [
-                    m.copy() if isinstance(m, dict) else m for m in saved_slice_metrics
-                ]
+            if saved_slice_metrics:
+                # 保存端截断到 slice_index（性能优化），恢复端逐条覆盖 + 默认值填充
+                for i, m in enumerate(saved_slice_metrics):
+                    if i < len(ctx._slice_metrics):
+                        ctx._slice_metrics[i] = m.copy() if isinstance(m, dict) else m
+                ctx.restore_slice_metrics(ctx.slice_index)
+            # 恢复成绩快照（用于 get_slice_status / check_slice_result 显示历史成绩）
+            saved_slice_stats = restored_progress.get("slice_stats")
+            if saved_slice_stats and ctx._slice_stats is not None:
+                while len(ctx._slice_stats) < ctx.slice_total:
+                    ctx._slice_stats.append(None)
+                for i, s in enumerate(saved_slice_stats):
+                    if i < ctx.slice_total:
+                        ctx._slice_stats[i] = s
 
         # 同步参数到 pending_slice_params，使 loadNextSlice 使用相同的自动推进逻辑
         self._coordinator.pending_slice_params.update(
@@ -1614,7 +1692,7 @@ class Bridge(QObject):
                     "current_slice": next_slice,
                     "slice_size": ctx._slice_size if hasattr(ctx, "_slice_size") else 0,
                     "slice_pass_counts": list(ctx._slice_pass_counts),
-                    "slice_stats": [s for s in ctx._slice_stats if s is not None],
+                    "slice_stats": list(ctx._slice_stats),
                     "metrics": {
                         "key_stroke_min": ctx._key_stroke_min,
                         "speed_min": ctx._speed_min,
@@ -1629,7 +1707,9 @@ class Bridge(QObject):
                     "advance_mode": self._coordinator.pending_slice_params.get(
                         "advance_mode", "sequential"
                     ),
-                    "slice_metrics": [m.copy() for m in ctx._slice_metrics],
+                    "slice_metrics": [
+                        m.copy() for m in ctx._slice_metrics[: ctx.slice_index]
+                    ],
                     "shuffle_seed": self._current_shuffle_seed,
                 }
                 log_info(
@@ -2149,6 +2229,68 @@ class Bridge(QObject):
                 segment_mode,
                 strict_length,
             )
+
+    # ==========================================
+    # AI 智能推荐
+    # ==========================================
+
+    @Slot()
+    def requestAiText(self) -> None:
+        """请求 AI 生成文本。"""
+        if self._ai_text_adapter:
+            self._ai_text_adapter.requestAiText()
+
+    @Property(bool, notify=aiTextLoadingChanged)
+    def aiTextLoading(self) -> bool:
+        return self._ai_text_adapter.loading if self._ai_text_adapter else False
+
+    @Property(str, notify=aiConfigChanged)
+    def aiBaseUrl(self) -> str:
+        return self._ai_text_adapter.base_url if self._ai_text_adapter else ""
+
+    @Property(str, notify=aiConfigChanged)
+    def aiModel(self) -> str:
+        return self._ai_text_adapter.model if self._ai_text_adapter else ""
+
+    @Property(str, notify=aiConfigChanged)
+    def aiApiFormat(self) -> str:
+        return (
+            self._ai_text_adapter.api_format if self._ai_text_adapter else "openai_chat"
+        )
+
+    @Property(int, notify=aiConfigChanged)
+    def aiMaxChars(self) -> int:
+        return self._ai_text_adapter.max_chars if self._ai_text_adapter else 300
+
+    @Property(bool, notify=aiConfigChanged)
+    def hasAiApiKey(self) -> bool:
+        return self._ai_text_adapter.has_api_key if self._ai_text_adapter else False
+
+    @Slot(str, result=bool)
+    def updateAiApiKey(self, api_key: str) -> bool:
+        if self._ai_text_adapter:
+            return self._ai_text_adapter.updateApiKey(api_key)
+        return False
+
+    @Slot(str)
+    def updateAiBaseUrl(self, base_url: str) -> None:
+        if self._ai_text_adapter:
+            self._ai_text_adapter.updateBaseUrl(base_url)
+
+    @Slot(str)
+    def updateAiModel(self, model: str) -> None:
+        if self._ai_text_adapter:
+            self._ai_text_adapter.updateModel(model)
+
+    @Slot(str)
+    def updateAiApiFormat(self, api_format: str) -> None:
+        if self._ai_text_adapter:
+            self._ai_text_adapter.updateApiFormat(api_format)
+
+    @Slot(int)
+    def updateAiMaxChars(self, max_chars: int) -> None:
+        if self._ai_text_adapter:
+            self._ai_text_adapter.updateMaxChars(max_chars)
 
     # ==========================================
     # 字体管理

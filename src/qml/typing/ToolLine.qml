@@ -6,15 +6,18 @@ import RinUI
 QQC.Pane {
     id: root
     property bool wenlaiLoading: false
+    property bool aiTextLoading: false
 
     padding: 8
 
     signal requestLoadTextFromClipboard // 定义从剪贴板载文信号
     signal requestLoadWenlai
+    signal requestAiText
     signal requestRetype
     signal requestToggleLeaderboard
     signal requestShuffle
     signal requestOpenSliceConfig // 打开载文设置 Dialog
+    signal requestSendText // 发文：复制文本段+元数据到剪贴板
 
     // 自定义 Pane 的背景（跟随 RinUI 主题）
     background: Rectangle {
@@ -81,6 +84,26 @@ QQC.Pane {
         }
 
         Button {
+            id: aiRecommend
+            width: 110
+            height: 36
+            anchors.verticalCenter: parent.verticalCenter
+            enabled: !root.aiTextLoading
+            text: "AI 推荐"
+            onClicked: {
+                root.requestAiText();
+            }
+        }
+
+        BusyIndicator {
+            width: 24
+            height: 24
+            anchors.verticalCenter: parent.verticalCenter
+            running: root.aiTextLoading
+            visible: root.aiTextLoading
+        }
+
+        Button {
             id: retype
             width: 110
             height: 36
@@ -99,6 +122,17 @@ QQC.Pane {
             text: "乱序[C^L]"
             onClicked: {
                 root.requestShuffle();
+            }
+        }
+
+        Button {
+            id: sendText
+            width: 110
+            height: 36
+            anchors.verticalCenter: parent.verticalCenter
+            text: "发文[C^D]"
+            onClicked: {
+                root.requestSendText();
             }
         }
 
