@@ -35,7 +35,7 @@ class TestHistoryRecordDTO:
             "date",
         ]
         assert result == {
-            "speed": 240.0,
+            "speed": 190.0,
             "keyStroke": 5.0,
             "codeLength": 1.25,
             "wrongNum": 10,
@@ -112,7 +112,7 @@ class TestScoreSummaryDTO:
         assert "键准" in text
         assert "%" in text
         # 无单位指标不附加单位
-        assert "速度240.00" in text
+        assert "速度190.00" in text
         assert "字数240" in text
         assert "键数300" in text
         assert "打词率" in text

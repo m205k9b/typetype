@@ -56,7 +56,7 @@ class TestSessionStatCalculations:
     """测试成绩计算属性"""
 
     def test_speed_calculation(self):
-        """测试速度计算"""
+        """测试速度计算（错一罚五）"""
         score = SessionStat(
             time=60.0,
             key_stroke_count=300,
@@ -64,8 +64,9 @@ class TestSessionStatCalculations:
             wrong_char_count=10,
             date="",
         )
-        # 240 * 60 / 60 = 240
-        assert score.speed == 240.0
+        # penalized_char_count = max(0, 240 - 10 * 5) = 190
+        # speed = 190 * 60 / 60 = 190
+        assert score.speed == 190.0
 
     def test_speed_zero_time(self):
         """测试时间为零时的速度"""
@@ -139,7 +140,7 @@ class TestSessionStatCalculations:
         assert score.accuracy == 100.0
 
     def test_effective_speed(self):
-        """测试有效速度计算"""
+        """测试有效速度计算（错一罚五）"""
         score = SessionStat(
             time=60.0,
             key_stroke_count=300,
@@ -147,9 +148,10 @@ class TestSessionStatCalculations:
             wrong_char_count=24,
             date="",
         )
-        # speed = 240, accuracy = 90%
-        # effective_speed = 240 * 0.9 = 216
-        assert score.effectiveSpeed == pytest.approx(216.0)
+        # penalized_char_count = max(0, 240 - 24 * 5) = 120
+        # speed = 120 * 60 / 60 = 120, accuracy = 90%
+        # effective_speed = 120 * 0.9 = 108
+        assert score.effectiveSpeed == pytest.approx(108.0)
 
     def test_key_accuracy_perfect(self):
         """测试无错误时的键准"""
@@ -199,6 +201,42 @@ class TestSessionStatCalculations:
         # wrong_keys = 100 + 0 = 100, keystrokes = 10
         # raw = (10 - 100) / 10 * 100 = -900%
         assert score.keyAccuracy == 0.0
+
+
+class TestPenalizedCharCount:
+    """测试错一罚五的有效字数计算"""
+
+    def test_no_wrong_chars(self):
+        """无错字时有效字数等于已打字数"""
+        score = SessionStat(char_count=240, wrong_char_count=0)
+        assert score.penalized_char_count == 240
+
+    def test_some_wrong_chars(self):
+        """有错字时有效字数 = 已打字数 - 错字数 × 5"""
+        score = SessionStat(char_count=240, wrong_char_count=10)
+        assert score.penalized_char_count == 190
+
+    def test_penalty_exceeds_char_count(self):
+        """错字过多导致有效字数归零"""
+        score = SessionStat(char_count=10, wrong_char_count=5)
+        # 10 - 5*5 = -15 → 0
+        assert score.penalized_char_count == 0
+
+    def test_exact_zero_boundary(self):
+        """刚好归零的边界"""
+        score = SessionStat(char_count=25, wrong_char_count=5)
+        # 25 - 25 = 0
+        assert score.penalized_char_count == 0
+
+    def test_speed_uses_penalized_count(self):
+        """速度基于有效字数计算"""
+        score = SessionStat(
+            time=30.0,
+            char_count=100,
+            wrong_char_count=10,
+        )
+        # penalized = 100 - 50 = 50, speed = 50 * 60 / 30 = 100
+        assert score.speed == 100.0
 
 
 class TestWordTypingRate:

@@ -57,10 +57,15 @@ class SessionStat:
             self.date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     @property
+    def penalized_char_count(self) -> int:
+        """错一罚五：有效字数 = 已打字数 - 错字数 × 5，最低为 0。"""
+        return max(0, self.char_count - self.wrong_char_count * 5)
+
+    @property
     def speed(self) -> float:
         if self.time == 0:
             return 0.0
-        return self.char_count * 60 / self.time
+        return self.penalized_char_count * 60 / self.time
 
     @property
     def keyStroke(self) -> float:
