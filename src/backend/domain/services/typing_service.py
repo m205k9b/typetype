@@ -28,6 +28,7 @@ EXCLUDE_PUNCTS: frozenset[str] = frozenset(
     "…—"  # 省略号、破折号（WPF 特殊处理）
 )
 
+PEAK_DELAY_SECONDS = 1.0
 
 @dataclass
 class TypingState:
@@ -161,6 +162,8 @@ class TypingService:
     def update_peaks(self) -> None:
         s = self._state.score_data
         if s.time <= 0:
+            return
+        if s.time < PEAK_DELAY_SECONDS:
             return
         if s.speed > self._state.peak_speed:
             self._state.peak_speed = s.speed
