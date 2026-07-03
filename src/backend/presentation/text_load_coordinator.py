@@ -138,13 +138,14 @@ class TextLoadCoordinator:
             self._typing.setup_network_session(text_id, source_key)
         elif source_key:
             self._typing.setup_local_session(source_key, None)
-        sender = self._build_local_sender_content(
-            source_label,
-            text,
-            index=text_id if text_id > 0 else 0,
-        )
-        if sender:
-            bridge._copy_text_to_clipboard(sender)
+        if source_label != "剪贴板":
+            sender = self._build_local_sender_content(
+                source_label,
+                text,
+                index=text_id if text_id > 0 else 0,
+            )
+            if sender:
+                bridge._copy_text_to_clipboard(sender)
         bridge.textLoaded.emit(text, text_id, source_label)
 
     def on_wenlai_text_loaded(self, text: str, title: str, bridge: "Bridge") -> None:
