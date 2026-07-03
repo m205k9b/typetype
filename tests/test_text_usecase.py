@@ -174,6 +174,7 @@ def test_load_from_clipboard_extracts_body_from_sender_format():
 
     assert result.success
     assert result.text == "正文一正文二"
+    assert result.segment_no == "12"
 
 
 def test_load_from_clipboard_extracts_body_from_qingfawen_hyphen_mark():
@@ -190,6 +191,37 @@ def test_load_from_clipboard_extracts_body_from_qingfawen_hyphen_mark():
 
     assert result.success
     assert result.text == "晴发文正文"
+    assert result.segment_no == "1-2"
+
+
+def test_load_from_clipboard_extracts_chinese_segment_no_from_sender_format():
+    """发文格式段号可为中文。"""
+    gateway = DummyTextSourceGateway()
+    usecase = LoadTextUseCase(
+        text_gateway=gateway,
+        clipboard_reader=DummyClipboardReader("标题\n正文\n-----第一段-测试"),
+    )
+
+    result = usecase.load_from_clipboard()
+
+    assert result.success
+    assert result.text == "正文"
+    assert result.segment_no == "一"
+
+
+def test_load_from_clipboard_extracts_english_segment_no_from_sender_format():
+    """发文格式段号可为英文。"""
+    gateway = DummyTextSourceGateway()
+    usecase = LoadTextUseCase(
+        text_gateway=gateway,
+        clipboard_reader=DummyClipboardReader("标题\n正文\n-----第abc段-测试"),
+    )
+
+    result = usecase.load_from_clipboard()
+
+    assert result.success
+    assert result.text == "正文"
+    assert result.segment_no == "abc"
 
 
 def test_load_from_clipboard_decodes_huangshu_sender_text():

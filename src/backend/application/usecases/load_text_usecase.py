@@ -36,8 +36,8 @@ class LoadTextUseCase:
     - Qt 信号、UI 状态
     """
 
-    _SEGMENT_MARK_PATTERN = re.compile(r"-----第\S*段")
-    _SEGMENT_NO_PATTERN = re.compile(r"-----第(\d+)段")
+    _SEGMENT_MARK_PATTERN = re.compile(r"-----第(.+?)段")
+    _SEGMENT_NO_PATTERN = _SEGMENT_MARK_PATTERN
     _INVISIBLE_CHAR_PATTERN = re.compile(r"[\u200b-\u200f\ufeff\u2060\u00ad]")
 
     def __init__(
