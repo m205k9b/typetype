@@ -65,6 +65,7 @@ files = [
     "src/backend/integration/remote_text_provider.py",
     "src/backend/integration/sqlite_char_stats_repository.py",
     "src/backend/integration/system_identifier.py",
+    "src/backend/integration/windows_key_listener.py",
     "src/backend/models/dto/auth_dto.py",
     "src/backend/models/dto/score_dto.py",
     "src/backend/models/dto/text_catalog_item.py",

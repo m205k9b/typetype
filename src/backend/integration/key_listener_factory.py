@@ -13,6 +13,7 @@ def create_key_listener(
     display_server: str,
     linux_listener_factory: Callable[[], KeyListener],
     macos_listener_factory: Callable[[], KeyListener],
+    windows_listener_factory: Callable[[], KeyListener],
 ) -> KeyListener | None:
     """Create and start the global key listener for platforms that need it."""
     factory: Callable[[], KeyListener] | None = None
@@ -21,6 +22,8 @@ def create_key_listener(
         factory = linux_listener_factory
     elif os_type == "macOS":
         factory = macos_listener_factory
+    elif os_type == "Windows":
+        factory = windows_listener_factory
 
     if factory is None:
         return None

@@ -390,6 +390,7 @@ def create_adapters(
     from ..integration.key_listener_factory import create_key_listener
     from ..integration.global_key_listener import GlobalKeyListener
     from ..integration.mac_key_listener import MacKeyListener
+    from ..integration.windows_key_listener import WindowsKeyListener
     from ..presentation.adapters.typing_adapter import TypingAdapter
     from ..presentation.adapters.text_adapter import TextAdapter
     from ..presentation.adapters.auth_adapter import AuthAdapter
@@ -473,6 +474,7 @@ def create_adapters(
         display_server=display_server,
         linux_listener_factory=GlobalKeyListener,
         macos_listener_factory=MacKeyListener,
+        windows_listener_factory=WindowsKeyListener,
     )
     if key_listener:
         log_info("因系统平台特殊性，全局监听器已启动")
