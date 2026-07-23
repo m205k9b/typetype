@@ -41,6 +41,7 @@
 | `wenlaiDifficultyLevel` | `int` | 晴发文难度等级（0=随机） |
 | `wenlaiCategory` | `str` | 晴发文分类 |
 | `wenlaiStrictLength` | `bool` | 晴发文是否精确字数 |
+| `scoreTextSlowCharsLimit` | `int` | 慢字词输出数量 |
 
 ## Signals（QML 通过 Connections 监听）
 
@@ -84,6 +85,7 @@
 | `wenlaiLoginResult` | `(bool success, str message)` | 晴发文登录结果 |
 | `wenlaiLoginStateChanged` | 无 | 晴发文登录状态变化 |
 | `wenlaiConfigChanged` | 无 | 晴发文配置或 active 状态变化 |
+| `scoreTextConfigChanged` | 无 | 可复制成绩文本配置变化 |
 | `wenlaiDifficultiesLoaded` | `(list items)` | 晴发文难度列表加载完成 |
 | `wenlaiCategoriesLoaded` | `(list items)` | 晴发文分类列表加载完成 |
 
@@ -111,6 +113,10 @@
 | `getCursorPos` | → `int` | 获取光标位置 |
 | `setCursorPos` | `(int newPos)` | 设置光标位置 |
 | `getScoreMessage` | → `str` | 获取成绩摘要消息 |
+| `getScoreTextOptions` | → `list[dict]` | 获取可配置成绩文本可选项 |
+| `isScoreTextItemEnabled` | `(str key)` → `bool` | 查询指定成绩文本可选项是否启用 |
+| `setScoreTextItemEnabled` | `(str key, bool enabled)` | 更新并持久化指定成绩文本可选项 |
+| `setScoreTextSlowCharsLimit` | `(int limit)` | 更新并持久化慢字词输出数量 |
 | `copyScoreMessage` | 无 | 复制成绩到剪贴板 |
 | `consumePendingSelectionKey` | → `bool` | 消费特殊平台底层监听捕获的候选选择键 |
 | `clearPendingSelectionKey` | 无 | 清空待匹配候选选择键 |

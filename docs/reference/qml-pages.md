@@ -15,7 +15,7 @@
 | `pages/AllTimeLeaderboard.qml` | （保留但导航已移除，建设中） | `leaderboardLoaded`, `leaderboardLoadFailed` |
 | `pages/UploadTextPage.qml` | 上传文本 | `uploadResult`, `loggedinChanged` |
 | `pages/ProfilePage.qml` | 个人中心 | `loginResult`, `registerResult`, `loggedinChanged`, `userInfoChanged`, `loginStateInitialized` |
-| `pages/SettingsPage.qml` | 设置 | `wenlaiLoginResult`, `wenlaiConfigChanged`, `wenlaiDifficultiesLoaded`, `wenlaiCategoriesLoaded` |
+| `pages/SettingsPage.qml` | 设置 | `wenlaiLoginResult`, `wenlaiConfigChanged`, `scoreTextConfigChanged`, `wenlaiDifficultiesLoaded`, `wenlaiCategoriesLoaded` |
 
 ## TypingPage 子组件
 
@@ -48,5 +48,5 @@
 | DailyLeaderboard | `loadLeaderboard("jisubei")`, `copyToClipboard(text)` |
 | UploadTextPage | `uploadText(title, content, sourceKey, toLocal, toCloud)` |
 | ProfilePage | `login(u, p)`, `register(u, p, n)`, `logout()`, `checkTokenStatus()` |
-| SettingsPage | `loginWenlai(u, p)`, `logoutWenlai()`, `refreshWenlaiDifficulties()`, `refreshWenlaiCategories()`, `updateWenlaiConfig(...)`, `setBaseUrl(url)` |
+| SettingsPage | `loginWenlai(u, p)`, `logoutWenlai()`, `refreshWenlaiDifficulties()`, `refreshWenlaiCategories()`, `updateWenlaiConfig(...)`, `getScoreTextOptions()`, `isScoreTextItemEnabled(key)`, `setScoreTextItemEnabled(key, enabled)`, `setScoreTextSlowCharsLimit(limit)`, `setBaseUrl(url)` |
 | LeaderboardPanel | `loadLeaderboardByTextId(id)`, `copyToClipboard(text)` |

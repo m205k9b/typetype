@@ -103,3 +103,16 @@ def test_settings_page_exposes_ziti_controls():
     assert "appBridge.loadZitiScheme(" in source
     assert "appBridge.setZitiEnabled(" in source
     assert "onZitiSchemesLoaded" in source
+
+
+def test_settings_page_exposes_score_text_controls():
+    page_qml = PROJECT_ROOT / "src/qml/pages/SettingsPage.qml"
+
+    source = page_qml.read_text(encoding="utf-8")
+
+    assert 'qsTr("成绩文本")' in source
+    assert "appBridge.getScoreTextOptions()" in source
+    assert "appBridge.isScoreTextItemEnabled(" in source
+    assert "appBridge.setScoreTextItemEnabled(" in source
+    assert "appBridge.scoreTextSlowCharsLimit" in source
+    assert "appBridge.setScoreTextSlowCharsLimit(" in source

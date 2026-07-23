@@ -250,7 +250,7 @@ def create_gateways(
     from ..integration.json_typing_totals_store import JsonTypingTotalsStore
 
     return Gateways(
-        score=ScoreGateway(clipboard=clipboard),
+        score=ScoreGateway(clipboard=clipboard, runtime_config=runtime_config),
         text_source=TextSourceGateway(
             runtime_config=runtime_config,
             text_provider=providers.text,

@@ -5,9 +5,49 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import ClassVar
 
+from ..models.dto.score_dto import SCORE_TEXT_OPTIONAL_KEYS
 from ..models.dto.text_catalog_item import TextCatalogItem
 from .app_paths import user_config_path
 from .text_source_config import TextSourceConfig, TextSourceEntry
+
+
+DEFAULT_SCORE_TEXT_OPTIONAL_KEYS: tuple[str, ...] = SCORE_TEXT_OPTIONAL_KEYS
+
+
+@dataclass
+class ScoreTextConfig:
+    """可复制成绩文本配置。"""
+
+    enabled_optional_items: list[str] = field(
+        default_factory=lambda: list(DEFAULT_SCORE_TEXT_OPTIONAL_KEYS)
+    )
+    slow_chars_limit: int = 10
+
+    def __post_init__(self) -> None:
+        self.enabled_optional_items = self._sanitize_enabled_items(
+            self.enabled_optional_items
+        )
+        self.slow_chars_limit = min(max(self._safe_limit(self.slow_chars_limit), 1), 10)
+
+    @staticmethod
+    def _sanitize_enabled_items(value: object) -> list[str]:
+        if not isinstance(value, list):
+            return list(DEFAULT_SCORE_TEXT_OPTIONAL_KEYS)
+        allowed = set(DEFAULT_SCORE_TEXT_OPTIONAL_KEYS)
+        seen: set[str] = set()
+        result: list[str] = []
+        for item in value:
+            if isinstance(item, str) and item in allowed and item not in seen:
+                result.append(item)
+                seen.add(item)
+        return result
+
+    @staticmethod
+    def _safe_limit(value: object) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 10
 
 
 @dataclass
@@ -119,6 +159,7 @@ class RuntimeConfig:
     wenlai: WenlaiConfig = field(default_factory=WenlaiConfig)
     ai: AiConfig = field(default_factory=AiConfig)
     text_session: TextSessionConfig = field(default_factory=TextSessionConfig)
+    score_text: ScoreTextConfig = field(default_factory=ScoreTextConfig)
     catalog_items: list[TextCatalogItem] = field(default_factory=list)
     _config_path: str | None = field(default=None, repr=False)
 
@@ -243,6 +284,16 @@ class RuntimeConfig:
             max_chars=cls._safe_int(ai_data.get("max_chars"), 300),
         )
 
+        score_text_data = data.get("score_text", {})
+        if not isinstance(score_text_data, dict):
+            score_text_data = {}
+        score_text = ScoreTextConfig(
+            enabled_optional_items=score_text_data.get(
+                "enabled_optional_items", list(DEFAULT_SCORE_TEXT_OPTIONAL_KEYS)
+            ),
+            slow_chars_limit=cls._safe_int(score_text_data.get("slow_chars_limit"), 10),
+        )
+
         return cls(
             base_url=base_url,
             api_timeout=api_timeout,
@@ -250,6 +301,7 @@ class RuntimeConfig:
             wenlai=wenlai,
             ai=ai,
             text_session=text_session,
+            score_text=score_text,
         )
 
     @staticmethod
@@ -312,6 +364,7 @@ class RuntimeConfig:
             data["base_url"] = self.base_url
             data["wenlai"] = self._to_dict()["wenlai"]
             data["ai"] = self._to_dict()["ai"]
+            data["score_text"] = self._to_dict()["score_text"]
             target_path.parent.mkdir(parents=True, exist_ok=True)
             with target_path.open("w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=4)
@@ -355,7 +408,28 @@ class RuntimeConfig:
                 "small_file_threshold": self.text_session.small_file_threshold,
                 "full_shuffle_threshold": self.text_session.full_shuffle_threshold,
             },
+            "score_text": {
+                "enabled_optional_items": list(self.score_text.enabled_optional_items),
+                "slow_chars_limit": self.score_text.slow_chars_limit,
+            },
         }
+
+    def update_score_text_config(
+        self,
+        *,
+        enabled_optional_items: list[str] | None = None,
+        slow_chars_limit: int | None = None,
+    ) -> None:
+        next_config = ScoreTextConfig(
+            enabled_optional_items=self.score_text.enabled_optional_items
+            if enabled_optional_items is None
+            else enabled_optional_items,
+            slow_chars_limit=self.score_text.slow_chars_limit
+            if slow_chars_limit is None
+            else slow_chars_limit,
+        )
+        self.score_text = next_config
+        self._save_to_file()
 
     def update_ai_config(
         self,

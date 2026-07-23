@@ -601,6 +601,21 @@ class TypingAdapter(QObject):
     def copy_score_message(self) -> None:
         self._score_gateway.copy_score_to_clipboard(self._typing_service.score_data)
 
+    def get_score_text_options(self) -> list[dict[str, str]]:
+        return self._score_gateway.get_score_text_options()
+
+    def is_score_text_item_enabled(self, key: str) -> bool:
+        return self._score_gateway.is_score_text_item_enabled(key)
+
+    def set_score_text_item_enabled(self, key: str, enabled: bool) -> None:
+        self._score_gateway.set_score_text_item_enabled(key, enabled)
+
+    def get_score_text_slow_chars_limit(self) -> int:
+        return self._score_gateway.slow_chars_limit
+
+    def set_score_text_slow_chars_limit(self, limit: int) -> None:
+        self._score_gateway.update_score_text_config(slow_chars_limit=limit)
+
     def set_slice_index(self, idx: int | None) -> None:
         """设置载文模式的片索引（None = 非分片模式）。"""
         self._slice_index = idx  # 适配器自有字段，用于模式检测和历史记录

@@ -128,6 +128,60 @@ class TestScoreSummaryDTO:
         assert "选重0" in text
         assert "打词率" in text
 
+    def test_to_clipboard_text_keeps_fixed_items_when_optional_items_disabled(self):
+        """段落外的固定核心成绩项不可被关闭。"""
+        score = SessionStat(
+            time=60.0,
+            key_stroke_count=300,
+            char_count=240,
+            wrong_char_count=10,
+            date="2024-01-01 00:00:00",
+        )
+
+        text = ScoreSummaryDTO.from_score_data(score).to_clipboard_text(
+            enabled_optional_keys=set()
+        )
+
+        assert text == "速度190.00 击键5.00 码长1.25"
+
+    def test_to_clipboard_text_filters_optional_items_and_limits_slow_entries(self):
+        """可选项按设置输出，慢字词按耗时取最慢 N 个。"""
+        score = SessionStat(
+            time=60.0,
+            key_stroke_count=300,
+            char_count=240,
+            wrong_char_count=10,
+            backspace_count=2,
+            correction_count=1,
+            date="2024-01-01 00:00:00",
+            slow_chars=[("早", 0.7), ("最慢", 1.5), ("次慢", 1.2)],
+        )
+
+        text = ScoreSummaryDTO.from_score_data(score).to_clipboard_text(
+            enabled_optional_keys={"wrong_chars", "slow_chars"},
+            slow_chars_limit=2,
+        )
+
+        assert text == "速度190.00 击键5.00 码长1.25 错字10 慢字:最慢(1.5s),次慢(1.2s)"
+
+    def test_score_gateway_applies_score_text_preferences(self):
+        """ScoreGateway 构建可复制成绩时使用成绩文本偏好。"""
+        gateway = ScoreGateway(DummyClipboard())
+        gateway.update_score_text_config(
+            enabled_optional_items=["wrong_chars"], slow_chars_limit=1
+        )
+        score = SessionStat(
+            time=60.0,
+            key_stroke_count=300,
+            char_count=240,
+            wrong_char_count=10,
+            date="2024-01-01 00:00:00",
+        )
+
+        text = gateway.build_score_plain_text(score)
+
+        assert text == "速度190.00 击键5.00 码长1.25 错字10"
+
     def test_to_plain_text(self):
         """应输出纯文本格式摘要"""
         score = SessionStat(
@@ -198,3 +252,41 @@ class TestAggregateScore:
 
         assert "选重: <b>5</b> 次" in html
         assert "选重5" in plain
+
+    def test_aggregate_plain_text_applies_optional_score_text_preferences(self):
+        gateway = ScoreGateway(DummyClipboard())
+        gateway.update_score_text_config(
+            enabled_optional_items=["wrong_chars", "time"], slow_chars_limit=10
+        )
+        slice_stats = [
+            {
+                "speed": 100.0,
+                "keyStroke": 5.0,
+                "codeLength": 2.0,
+                "char_count": 10,
+                "wrong_char_count": 0,
+                "backspace_count": 1,
+                "correction_count": 0,
+                "selection_count": 2,
+                "time": 6.0,
+                "key_stroke_count": 50,
+            },
+            {
+                "speed": 120.0,
+                "keyStroke": 6.0,
+                "codeLength": 2.0,
+                "char_count": 10,
+                "wrong_char_count": 1,
+                "backspace_count": 0,
+                "correction_count": 1,
+                "selection_count": 3,
+                "time": 5.0,
+                "key_stroke_count": 60,
+            },
+        ]
+
+        plain = gateway.build_aggregate_plain_text(slice_stats, 2)
+
+        assert (
+            plain == "综合成绩（2片） 速度110.00 击键5.50 码长2.00 错字1 用时11.000秒"
+        )

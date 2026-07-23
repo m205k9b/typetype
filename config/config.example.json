@@ -2,6 +2,23 @@
   "base_url": "http://127.0.0.1:8080",
   "default_text_source_key": "builtin_demo",
   "api_timeout": 20.0,
+  "score_text": {
+    "enabled_optional_items": [
+      "wrong_chars",
+      "corrections",
+      "backspaces",
+      "selections",
+      "key_accuracy",
+      "char_count",
+      "time",
+      "key_count",
+      "word_typing_rate",
+      "biao_ding",
+      "peak",
+      "slow_chars"
+    ],
+    "slow_chars_limit": 10
+  },
   "wenlai": {
     "base_url": "https://qingfawen.fcxxz.com",
     "length": 0,

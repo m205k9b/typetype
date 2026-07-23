@@ -122,6 +122,7 @@ class Bridge(QObject):
     aiTextFailed = Signal(str)
     aiTextLoadingChanged = Signal()
     aiConfigChanged = Signal()
+    scoreTextConfigChanged = Signal()
     # 本地长文信号
     localArticlesLoaded = Signal(list)
     localArticlesLoadFailed = Signal(str)
@@ -1061,6 +1062,28 @@ class Bridge(QObject):
     @Slot(result=str)
     def getScorePlainText(self) -> str:
         return self._build_current_score_plain_text()
+
+    @Slot(result="QVariantList")
+    def getScoreTextOptions(self) -> list[dict[str, str]]:
+        return self._typing_adapter.get_score_text_options()
+
+    @Slot(str, result=bool)
+    def isScoreTextItemEnabled(self, key: str) -> bool:
+        return self._typing_adapter.is_score_text_item_enabled(key)
+
+    @Slot(str, bool)
+    def setScoreTextItemEnabled(self, key: str, enabled: bool) -> None:
+        self._typing_adapter.set_score_text_item_enabled(key, enabled)
+        self.scoreTextConfigChanged.emit()
+
+    @Property(int, notify=scoreTextConfigChanged)
+    def scoreTextSlowCharsLimit(self) -> int:
+        return self._typing_adapter.get_score_text_slow_chars_limit()
+
+    @Slot(int)
+    def setScoreTextSlowCharsLimit(self, limit: int) -> None:
+        self._typing_adapter.set_score_text_slow_chars_limit(limit)
+        self.scoreTextConfigChanged.emit()
 
     @Slot()
     def copyScoreMessage(self) -> None:

@@ -5,7 +5,10 @@ import json
 from pathlib import Path
 
 from src.backend.models.dto.text_catalog_item import TextCatalogItem
-from src.backend.config.runtime_config import RuntimeConfig
+from src.backend.config.runtime_config import (
+    DEFAULT_SCORE_TEXT_OPTIONAL_KEYS,
+    RuntimeConfig,
+)
 
 
 def test_runtime_config_from_dict_builds_sources_and_default_key():
@@ -126,6 +129,61 @@ def test_update_base_url_persists_to_user_config(monkeypatch, tmp_path: Path):
         json.loads(bundled_example.read_text(encoding="utf-8"))["base_url"]
         == "http://old"
     )
+
+
+def test_runtime_config_loads_score_text_defaults_when_missing():
+    config = RuntimeConfig._from_dict({})
+
+    assert config.score_text.enabled_optional_items == list(
+        DEFAULT_SCORE_TEXT_OPTIONAL_KEYS
+    )
+    assert config.score_text.slow_chars_limit == 10
+
+
+def test_runtime_config_filters_score_text_items_and_clamps_slow_limit():
+    config = RuntimeConfig._from_dict(
+        {
+            "score_text": {
+                "enabled_optional_items": [
+                    "wrong_chars",
+                    "speed",
+                    "bad_key",
+                    "slow_chars",
+                ],
+                "slow_chars_limit": 99,
+            }
+        }
+    )
+
+    assert config.score_text.enabled_optional_items == ["wrong_chars", "slow_chars"]
+    assert config.score_text.slow_chars_limit == 10
+
+
+def test_update_score_text_config_persists_to_user_config(monkeypatch, tmp_path: Path):
+    user_config = tmp_path / "user" / "config.json"
+    bundled_example = tmp_path / "bundle" / "config.example.json"
+    bundled_example.parent.mkdir(parents=True)
+    bundled_example.write_text(
+        json.dumps({"base_url": "http://old", "text_sources": {}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "src.backend.config.runtime_config.user_config_path",
+        lambda: user_config,
+    )
+
+    runtime_config = RuntimeConfig.load_from_file(str(bundled_example))
+    runtime_config.update_score_text_config(
+        enabled_optional_items=["wrong_chars", "time"], slow_chars_limit=3
+    )
+
+    saved = json.loads(user_config.read_text(encoding="utf-8"))["score_text"]
+    assert runtime_config.score_text.enabled_optional_items == ["wrong_chars", "time"]
+    assert runtime_config.score_text.slow_chars_limit == 3
+    assert saved == {
+        "enabled_optional_items": ["wrong_chars", "time"],
+        "slow_chars_limit": 3,
+    }
 
 
 def test_runtime_config_loads_default_wenlai_config_when_missing():

@@ -12,6 +12,7 @@ FluentPage {
     property string lastWenlaiSegmentMode: appBridge ? appBridge.wenlaiSegmentMode : "manual"
     property bool syncingWenlaiControls: false
     property bool syncingAiControls: false
+    property bool syncingScoreTextControls: false
     property bool syncingZitiControls: false
     property bool _populatingDeviceList: false
 
@@ -33,6 +34,10 @@ FluentPage {
 
     ListModel {
         id: deviceListModel
+    }
+
+    ListModel {
+        id: scoreTextOptionsModel
     }
 
     property int _selectedFontIndex: -1
@@ -132,6 +137,34 @@ FluentPage {
         }
     }
 
+    function syncScoreTextOptions() {
+        syncingScoreTextControls = true
+        scoreTextOptionsModel.clear()
+        if (appBridge) {
+            var items = appBridge.getScoreTextOptions()
+            for (var i = 0; i < items.length; i++) {
+                scoreTextOptionsModel.append({
+                    keyValue: items[i].key,
+                    label: items[i].label,
+                    enabledValue: appBridge.isScoreTextItemEnabled(items[i].key)
+                })
+            }
+            scoreTextSlowCharsSpin.value = appBridge.scoreTextSlowCharsLimit
+        }
+        syncingScoreTextControls = false
+    }
+
+    function scoreTextSummary() {
+        if (scoreTextOptionsModel.count === 0)
+            return qsTr("速度、击键、码长固定发送")
+        var enabledCount = 0
+        for (var i = 0; i < scoreTextOptionsModel.count; i++) {
+            if (scoreTextOptionsModel.get(i).enabledValue)
+                enabledCount++
+        }
+        return qsTr("固定发送段落号、速度、击键、码长；可选项 ") + enabledCount + "/" + scoreTextOptionsModel.count
+    }
+
     function syncZitiSchemeModel(items) {
         syncingZitiControls = true
         zitiSchemeModel.clear()
@@ -227,6 +260,7 @@ FluentPage {
         if (appBridge) {
             appBridge.loadZitiSchemes()
             appBridge.loadFonts()
+            syncScoreTextOptions()
         }
         // 延迟加载键盘设备列表，避免 evdev 扫描阻塞首次页面渲染
         Qt.callLater(_refreshDeviceList)
@@ -500,6 +534,126 @@ FluentPage {
                 onClicked: {
                     if (baseUrlField.text.trim().length > 0) {
                         appBridge.setBaseUrl(baseUrlField.text.trim())
+                    }
+                }
+            }
+        }
+    }
+
+    Text {
+        typography: Typography.Subtitle
+        text: qsTr("成绩文本")
+        Layout.topMargin: 16
+        Layout.bottomMargin: 8
+    }
+
+    SettingCard {
+        Layout.fillWidth: true
+        title: qsTr("发成绩内容")
+        icon.name: "ic_fluent_clipboard_text_20_regular"
+        description: scoreTextSummary()
+
+        Button {
+            text: qsTr("管理")
+            onClicked: {
+                syncScoreTextOptions()
+                scoreTextDialog.open()
+            }
+        }
+    }
+
+    Dialog {
+        id: scoreTextDialog
+        title: qsTr("成绩文本")
+        modal: true
+        standardButtons: Dialog.Close
+        width: 420
+
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 12
+
+            Text {
+                Layout.fillWidth: true
+                typography: Typography.Caption
+                color: Theme.currentTheme.colors.textSecondaryColor
+                text: qsTr("段落号、速度、击键、码长固定发送")
+                wrapMode: Text.WordWrap
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                height: 1
+                color: Theme.currentTheme.colors.dividerBorderColor
+            }
+
+            QQC.ScrollView {
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(scoreTextOptionsModel.count * 36 + 4, 300)
+                clip: true
+
+                ColumnLayout {
+                    spacing: 2
+                    width: parent.width
+
+                    Repeater {
+                        model: scoreTextOptionsModel
+
+                        delegate: RowLayout {
+                            property string optionKey: model.keyValue
+                            property string optionLabel: model.label
+                            property bool optionEnabled: model.enabledValue
+
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 34
+                            spacing: 8
+
+                            CheckBox {
+                                checked: optionEnabled
+                                implicitHeight: 20
+                                implicitWidth: 20
+                                padding: 0
+                                onCheckedChanged: {
+                                    if (syncingScoreTextControls)
+                                        return
+                                    scoreTextOptionsModel.setProperty(index, "enabledValue", checked)
+                                    if (appBridge)
+                                        appBridge.setScoreTextItemEnabled(optionKey, checked)
+                                }
+                            }
+
+                            Text {
+                                text: optionLabel
+                                typography: Typography.Body
+                                Layout.fillWidth: true
+                            }
+                        }
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                Text {
+                    typography: Typography.Body
+                    text: qsTr("慢字词数量")
+                }
+
+                SpinBox {
+                    id: scoreTextSlowCharsSpin
+                    Layout.preferredWidth: 124
+                    Layout.preferredHeight: 34
+                    from: 1
+                    to: 10
+                    value: appBridge ? appBridge.scoreTextSlowCharsLimit : 10
+                    editable: true
+                    onValueChanged: {
+                        if (syncingScoreTextControls)
+                            return
+                        if (appBridge)
+                            appBridge.setScoreTextSlowCharsLimit(value)
                     }
                 }
             }
@@ -1097,6 +1251,10 @@ FluentPage {
             else if (f === "anthropic") aiApiFormatCombo.currentIndex = 2
             else aiApiFormatCombo.currentIndex = 0
             syncingAiControls = false
+        }
+
+        function onScoreTextConfigChanged() {
+            syncScoreTextOptions()
         }
 
         function onZitiSchemesLoaded(items) {

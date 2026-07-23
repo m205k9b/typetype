@@ -12,6 +12,7 @@
 | `api_timeout` | `float` | `20.0` | API 请求超时（秒） |
 | `text_sources` | `dict[str, TextSourceEntry]` | `{}` | 文本来源配置表 |
 | `wenlai` | `dict` | 见下 | 晴发文服务配置 |
+| `score_text` | `dict` | 见下 | 可复制成绩文本配置 |
 | `ui` | `dict` | 见下 | UI 主题与外观配置 |
 
 ## TextSourceEntry 字段
@@ -68,6 +69,15 @@
 | `wenlai.user_id` | `int` | `0` | 晴发文用户 ID |
 
 晴发文 token 不写入 JSON 配置，走系统密钥环中的 `wenlai_user` token key。
+
+## ScoreText 子字段
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `score_text.enabled_optional_items` | `list[str]` | 全部可选项 | 可复制成绩文本中启用的可选项；段落号、速度、击键、码长固定输出 |
+| `score_text.slow_chars_limit` | `int` | `10` | 慢字词输出数量，范围 1-10 |
+
+可选项 key：`wrong_chars`、`corrections`、`backspaces`、`selections`、`key_accuracy`、`char_count`、`time`、`key_count`、`word_typing_rate`、`biao_ding`、`peak`、`slow_chars`。
 
 ## UI 子字段
 

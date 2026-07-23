@@ -3,6 +3,7 @@
 用于隔离网络/界面传输结构，避免与领域模型耦合。
 """
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -10,10 +11,31 @@ if TYPE_CHECKING:
     from ...models.entity.session_stat import SessionStat
 
 
+SCORE_TEXT_REQUIRED_KEYS: tuple[str, ...] = ("speed", "key_stroke", "code_length")
+SCORE_TEXT_OPTIONAL_ITEM_DEFINITIONS: tuple[tuple[str, str], ...] = (
+    ("wrong_chars", "错字"),
+    ("corrections", "回改"),
+    ("backspaces", "退格"),
+    ("selections", "选重"),
+    ("key_accuracy", "键准"),
+    ("char_count", "字数"),
+    ("time", "用时"),
+    ("key_count", "键数"),
+    ("word_typing_rate", "打词率"),
+    ("biao_ding", "标顶"),
+    ("peak", "峰值"),
+    ("slow_chars", "慢字词"),
+)
+SCORE_TEXT_OPTIONAL_KEYS: tuple[str, ...] = tuple(
+    key for key, _label in SCORE_TEXT_OPTIONAL_ITEM_DEFINITIONS
+)
+
+
 @dataclass
 class ScoreSummaryItemDTO:
     """成绩摘要项 DTO。"""
 
+    key: str
     label: str
     value: float | int
     unit: str
@@ -36,78 +58,91 @@ class ScoreSummaryDTO:
         return cls(
             items=[
                 ScoreSummaryItemDTO(
+                    key="speed",
                     label="速度",
                     value=score_data.speed,
                     unit="字/分",
                     value_format=".2f",
                 ),
                 ScoreSummaryItemDTO(
+                    key="key_stroke",
                     label="击键",
                     value=score_data.keyStroke,
                     unit="击/秒",
                     value_format=".2f",
                 ),
                 ScoreSummaryItemDTO(
+                    key="code_length",
                     label="码长",
                     value=score_data.codeLength,
                     unit="击/字",
                     value_format=".2f",
                 ),
                 ScoreSummaryItemDTO(
+                    key="wrong_chars",
                     label="错字",
                     value=score_data.wrong_char_count,
                     unit="字",
                     value_format="d",
                 ),
                 ScoreSummaryItemDTO(
+                    key="corrections",
                     label="回改",
                     value=score_data.correction_count,
                     unit="次",
                     value_format="d",
                 ),
                 ScoreSummaryItemDTO(
+                    key="backspaces",
                     label="退格",
                     value=score_data.backspace_count,
                     unit="次",
                     value_format="d",
                 ),
                 ScoreSummaryItemDTO(
+                    key="selections",
                     label="选重",
                     value=score_data.selection_count,
                     unit="次",
                     value_format="d",
                 ),
                 ScoreSummaryItemDTO(
+                    key="key_accuracy",
                     label="键准",
                     value=score_data.keyAccuracy,
                     unit="%",
                     value_format=".2f",
                 ),
                 ScoreSummaryItemDTO(
+                    key="char_count",
                     label="字数",
                     value=score_data.char_count,
                     unit="",
                     value_format="d",
                 ),
                 ScoreSummaryItemDTO(
+                    key="time",
                     label="用时",
                     value=score_data.time,
                     unit="秒",
                     value_format=".3f",
                 ),
                 ScoreSummaryItemDTO(
+                    key="key_count",
                     label="键数",
                     value=score_data.key_stroke_count,
                     unit="",
                     value_format=".2f",
                 ),
                 ScoreSummaryItemDTO(
+                    key="word_typing_rate",
                     label="打词率",
                     value=score_data.word_typing_rate,
                     unit="%",
                     value_format=".1f",
                 ),
                 ScoreSummaryItemDTO(
+                    key="biao_ding",
                     label="标顶",
                     value=score_data.biao_ding_count,
                     unit="次",
@@ -122,49 +157,107 @@ class ScoreSummaryDTO:
             slow_chars=score_data.slow_chars or None,
         )
 
-    def to_clipboard_text(self) -> str:
+    def to_clipboard_text(
+        self,
+        enabled_optional_keys: Iterable[str] | None = None,
+        slow_chars_limit: int = 10,
+    ) -> str:
         """渲染为木易跟打器风格单行纯文本（剪贴板用）。"""
+        optional_keys = self._enabled_optional_keys(enabled_optional_keys)
         parts: list[str] = []
-        for item in self.items:
+        for item in self._visible_items(optional_keys):
             value_str = f"{item.value:{item.value_format}}"
             if item.unit in ("秒", "%"):
                 parts.append(f"{item.label}{value_str}{item.unit}")
             else:
                 parts.append(f"{item.label}{value_str}")
-        if self.peak_speed > 0:
+        if "peak" in optional_keys and self.peak_speed > 0:
             parts.append(
                 f"峰值{self.peak_speed:.2f}/{self.peak_key_stroke:.2f}/{self.peak_code_length:.2f}"
             )
-        if self.slow_chars:
-            slow_str = ",".join(f"{c}({t}s)" for c, t in self.slow_chars)
+        slow_chars = self._limited_slow_chars(optional_keys, slow_chars_limit)
+        if slow_chars:
+            slow_str = ",".join(f"{c}({t}s)" for c, t in slow_chars)
             parts.append(f"慢字:{slow_str}")
         return " ".join(parts)
 
-    def to_plain_text(self) -> str:
+    def to_plain_text(
+        self,
+        enabled_optional_keys: Iterable[str] | None = None,
+        slow_chars_limit: int = 10,
+    ) -> str:
         """渲染为纯文本格式。"""
-        return self._render(value_prefix="", value_suffix="", line_suffix="\n")
+        return self._render(
+            value_prefix="",
+            value_suffix="",
+            line_suffix="\n",
+            enabled_optional_keys=enabled_optional_keys,
+            slow_chars_limit=slow_chars_limit,
+        )
 
-    def to_html(self) -> str:
+    def to_html(
+        self,
+        enabled_optional_keys: Iterable[str] | None = None,
+        slow_chars_limit: int = 10,
+    ) -> str:
         """渲染为 HTML 格式。"""
-        return self._render(value_prefix="<b>", value_suffix="</b>", line_suffix="<br>")
+        return self._render(
+            value_prefix="<b>",
+            value_suffix="</b>",
+            line_suffix="<br>",
+            enabled_optional_keys=enabled_optional_keys,
+            slow_chars_limit=slow_chars_limit,
+        )
 
-    def _render(self, value_prefix: str, value_suffix: str, line_suffix: str) -> str:
+    def _render(
+        self,
+        value_prefix: str,
+        value_suffix: str,
+        line_suffix: str,
+        enabled_optional_keys: Iterable[str] | None = None,
+        slow_chars_limit: int = 10,
+    ) -> str:
         """按给定标记渲染文本。"""
+        optional_keys = self._enabled_optional_keys(enabled_optional_keys)
         lines: list[str] = []
-        for item in self.items:
+        for item in self._visible_items(optional_keys):
             value_str = f"{item.value:{item.value_format}}"
             unit_part = f" {item.unit}" if item.unit else ""
             lines.append(
                 f"{item.label}: {value_prefix}{value_str}{value_suffix}{unit_part}{line_suffix}"
             )
-        if self.peak_speed > 0:
+        if "peak" in optional_keys and self.peak_speed > 0:
             lines.append(
                 f"峰值: {value_prefix}{self.peak_speed:.2f}/{self.peak_key_stroke:.2f}/{self.peak_code_length:.2f}{value_suffix}{line_suffix}"
             )
-        if self.slow_chars:
-            slow_str = ", ".join(f"{c}({t}s)" for c, t in self.slow_chars)
+        slow_chars = self._limited_slow_chars(optional_keys, slow_chars_limit)
+        if slow_chars:
+            slow_str = ", ".join(f"{c}({t}s)" for c, t in slow_chars)
             lines.append(f"慢字: {slow_str}{line_suffix}")
         return "".join(lines)
+
+    def _visible_items(self, optional_keys: set[str]) -> list[ScoreSummaryItemDTO]:
+        return [
+            item
+            for item in self.items
+            if item.key in SCORE_TEXT_REQUIRED_KEYS or item.key in optional_keys
+        ]
+
+    @staticmethod
+    def _enabled_optional_keys(enabled_optional_keys: Iterable[str] | None) -> set[str]:
+        if enabled_optional_keys is None:
+            return set(SCORE_TEXT_OPTIONAL_KEYS)
+        return set(enabled_optional_keys) & set(SCORE_TEXT_OPTIONAL_KEYS)
+
+    def _limited_slow_chars(
+        self, optional_keys: set[str], slow_chars_limit: int
+    ) -> list[tuple[str, float]]:
+        if "slow_chars" not in optional_keys or not self.slow_chars:
+            return []
+        limit = max(int(slow_chars_limit), 0)
+        if limit <= 0:
+            return []
+        return sorted(self.slow_chars, key=lambda item: item[1], reverse=True)[:limit]
 
 
 @dataclass
