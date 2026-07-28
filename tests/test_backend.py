@@ -1,6 +1,7 @@
 """Bridge 模块测试。"""
 
 from PySide6.QtCore import QObject, Signal
+from PySide6.QtGui import QTextCursor, QTextDocument
 from dataclasses import dataclass
 
 from src.backend.ports.key_codes import KeyCodes
@@ -1422,6 +1423,44 @@ class TestBridgeSpecialPlatform:
             typing_adapter._typing_service.handle_committed_text = original_handle
 
         assert cursor_is_none_during_emit == [True]
+
+    def test_committed_text_converts_utf16_growth_for_surrogate_pair(self):
+        typing_adapter, _, _, _ = self._create_mock_services()
+        service = typing_adapter._typing_service
+        text = "𪸩耳，"
+        service.set_total_chars(len(text))
+        service.set_plain_doc(text)
+
+        typing_adapter.handleCommittedText("𪸩", 2)
+        typing_adapter.handleCommittedText("耳", 1)
+
+        assert service.score_data.char_count == 2
+        assert service.score_data.wrong_char_count == 0
+
+    def test_coloring_converts_character_index_to_qt_utf16_position(self):
+        typing_adapter, _, _, _ = self._create_mock_services()
+        service = typing_adapter._typing_service
+        text = "𪸩耳，"
+        doc = QTextDocument(text)
+        service.set_total_chars(len(text))
+        service.set_plain_doc(text)
+        typing_adapter._rich_doc = doc
+        typing_adapter._cursor = QTextCursor(doc)
+
+        typing_adapter.handleCommittedText("𪸩", 2)
+
+        html_after_first_char = doc.toHtml()
+        assert '<span style=" background-color:#808080;">𪸩</span>耳' in (
+            html_after_first_char
+        )
+
+        typing_adapter.handleCommittedText("耳", 1)
+
+        cursor = QTextCursor(doc)
+        cursor.setPosition(2)
+        ear_color = cursor.charFormat().background().color().name()
+
+        assert ear_color == "#808080"
 
     def test_bridge_forwards_trainer_navigation_slots(self):
         typing_adapter, text_adapter, auth_adapter, char_stats_adapter = (

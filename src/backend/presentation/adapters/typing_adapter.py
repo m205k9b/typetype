@@ -128,10 +128,46 @@ class TypingAdapter(QObject):
         if begin_pos + n > doc_len or begin_pos >= doc_len:
             return
         self._cursor.setPosition(begin_pos)
-        self._cursor.movePosition(
-            QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor, n
-        )
+        self._cursor.setPosition(begin_pos + n, QTextCursor.MoveMode.KeepAnchor)
         self._cursor.setCharFormat(fmt)
+
+    @staticmethod
+    def _utf16_len(text: str) -> int:
+        return len(text.encode("utf-16-le")) // 2
+
+    def _codepoint_delta_from_utf16_delta(self, s: str, grow_length: int) -> int:
+        if grow_length == 0:
+            return 0
+
+        if grow_length > 0:
+            units = 0
+            count = 0
+            for char in s:
+                units += self._utf16_len(char)
+                count += 1
+                if units >= grow_length:
+                    break
+            return count
+
+        target_units = abs(grow_length)
+        units = 0
+        count = 0
+        char_count = self._typing_service.score_data.char_count
+        text_before_cursor = self._typing_service.state.plain_doc[:char_count]
+        for char in reversed(text_before_cursor):
+            units += self._utf16_len(char)
+            count += 1
+            if units >= target_units:
+                break
+        return -count
+
+    def _color_char_at(self, char_pos: int, fmt: QTextCharFormat) -> None:
+        plain_doc = self._typing_service.state.plain_doc
+        if char_pos < 0 or char_pos >= len(plain_doc):
+            return
+        qt_pos = self._utf16_len(plain_doc[:char_pos])
+        qt_len = self._utf16_len(plain_doc[char_pos])
+        self._color_text(qt_pos, qt_len, fmt)
 
     def _clear_formatting(self) -> None:
         """清除 QTextDocument 上的所有字符格式（着色），不改文本内容。"""
@@ -365,33 +401,32 @@ class TypingAdapter(QObject):
             if not self._second_timer.isActive():
                 self._second_timer.start()
             self._set_paused(False)
+        codepoint_grow_length = self._codepoint_delta_from_utf16_delta(s, grow_length)
         char_updates, is_completed = self._typing_service.handle_committed_text(
-            s, grow_length
+            s, codepoint_grow_length
         )
 
         if self._cursor and char_updates:
             self._cursor.beginEditBlock()
             try:
-                if grow_length > 0:
+                if codepoint_grow_length > 0:
                     # 新增字符：着色
                     for pos, char, is_error in char_updates:
                         if char:
-                            self._color_text(
+                            self._color_char_at(
                                 pos,
-                                1,
                                 self._correct_fmt if not is_error else self._error_fmt,
                             )
                 else:
                     # 删除/替换：着色
                     for pos, char, is_error in char_updates:
                         if char:
-                            self._color_text(
+                            self._color_char_at(
                                 pos,
-                                1,
                                 self._correct_fmt if not is_error else self._error_fmt,
                             )
                         else:
-                            self._color_text(pos, 1, self._no_fmt)
+                            self._color_char_at(pos, self._no_fmt)
             finally:
                 self._cursor.endEditBlock()
 
