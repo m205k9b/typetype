@@ -30,6 +30,19 @@ def test_enter_shortcut_toggles_typing_pause():
     assert "toggleTypingPause()" in lower_pane_source
 
 
+def test_typing_panes_disable_horizontal_scrollbars():
+    upper_pane = PROJECT_ROOT / "src/qml/typing/UpperPane.qml"
+    lower_pane = PROJECT_ROOT / "src/qml/typing/LowerPane.qml"
+
+    for pane in (upper_pane, lower_pane):
+        source = pane.read_text(encoding="utf-8")
+
+        assert "QQC.ScrollBar.horizontal: QQC.ScrollBar {" in source
+        assert "policy: QQC.ScrollBar.AlwaysOff" in source
+        assert "QQC.ScrollBar.vertical: QQC.ScrollBar {" in source
+        assert "policy: QQC.ScrollBar.AsNeeded" in source
+
+
 def test_linux_preedit_backspace_counts_as_backspace():
     lower_pane = PROJECT_ROOT / "src/qml/typing/LowerPane.qml"
 

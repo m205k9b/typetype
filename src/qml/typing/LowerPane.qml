@@ -36,6 +36,10 @@ QQC.Pane {
         clip: true // 确保文字不超出 Pane 的边界
 
         // 在 Qt 6 中，ScrollBar 应该附加给 ScrollView
+        QQC.ScrollBar.horizontal: QQC.ScrollBar {
+            policy: QQC.ScrollBar.AlwaysOff
+        }
+
         QQC.ScrollBar.vertical: QQC.ScrollBar {
             policy: QQC.ScrollBar.AsNeeded
         }
